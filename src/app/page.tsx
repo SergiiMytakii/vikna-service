@@ -1,66 +1,114 @@
 import Image from "next/image";
-import styles from "./page.module.css";
+import {PaymentForm} from "@/components/payment-form";
+
+const services = [
+  "Металопластикові вікна та двері",
+  "Вхідні та міжкімнатні двері",
+  "Жалюзі, ролети, рулонні штори",
+  "Продаж і професійний монтаж під ключ",
+];
 
 export default function Home() {
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>To get started, edit the page.tsx file.</h1>
+    <div className="site-shell">
+      <header className="hero" id="top">
+        <div className="hero-content">
+          <p className="eyebrow">Вікна-Сервіс Кілія</p>
+          <h1>Надійні вікна, двері та сонцезахист з оплатою онлайн</h1>
+          <p className="lead">
+            Розрахуйте вартість замовлення та оплатіть через LiqPay у кілька
+            кроків. Працюємо по Кілії, Вилковому та Шевченковому.
+          </p>
+          <div className="hero-actions">
+            <a className="btn btn-primary" href="#payment">
+              Перейти до оплати
+            </a>
+            <a
+              className="btn btn-secondary"
+              href="https://www.facebook.com/oknaservis"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Facebook сторінка
+            </a>
+          </div>
+        </div>
+
+        <div className="brand-panel">
+          <Image
+            src="/logo.png"
+            alt="Логотип Вікна-Сервіс"
+            width={334}
+            height={130}
+            priority
+          />
           <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
+            Встановлення металопластикових конструкцій, міжкімнатних і вхідних
+            дверей, а також сучасних рішень для захисту від сонця.
           </p>
         </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+      </header>
+
+      <main>
+        <section className="section-grid">
+          <article className="card service-card">
+            <h2>Що ми робимо</h2>
+            <ul>
+              {services.map((service) => (
+                <li key={service}>{service}</li>
+              ))}
+            </ul>
+          </article>
+
+          <article className="card contact-card">
+            <h2>Контакти</h2>
+            <ul>
+              <li>
+                Телефон: <a href="tel:+380677774027">+38 (067) 777 40 27</a>
+              </li>
+              <li>
+                Email: <a href="mailto:serjmitaki@gmail.com">serjmitaki@gmail.com</a>
+              </li>
+              <li>Зона обслуговування: Кілія, Вилкове, Шевченкове</li>
+            </ul>
+            <div className="socials">
+              <a
+                className="btn btn-secondary"
+                href="https://www.facebook.com/oknaservis"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Facebook
+              </a>
+              <a
+                className="btn btn-secondary"
+                href="https://www.instagram.com/okna_servis_kiliya"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Instagram
+              </a>
+            </div>
+          </article>
+        </section>
+
+        <section className="payment-section" id="payment">
+          <div className="payment-header">
+            <p className="eyebrow">Оплата через LiqPay</p>
+            <h2>Заповніть форму та перейдіть до безпечної оплати</h2>
+            <p>
+              Доступні методи: картка, Privat24, Оплата частинами та Миттєва
+              розстрочка.
+            </p>
+          </div>
+          <PaymentForm />
+        </section>
       </main>
+
+      <footer className="footer">
+        <p>© {new Date().getFullYear()} Вікна-Сервіс. Усі права захищено.</p>
+        <a href="#top">Вгору</a>
+      </footer>
     </div>
   );
 }

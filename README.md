@@ -1,36 +1,100 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Вікна-Сервіс Payment Web App
 
-## Getting Started
+Next.js single-page website with LiqPay checkout integration and Firebase Functions backend for secure signature generation and callback verification.
 
-First, run the development server:
+## Tech stack
+
+- Next.js (App Router, TypeScript)
+- Firebase Cloud Functions (TypeScript)
+- LiqPay Checkout (`card, privat24, paypart, moment_part`)
+- Netlify deployment (`vikna-service.run.place`)
+
+## Local setup
+
+1. Install dependencies:
+
+```bash
+npm install
+npm --prefix functions install
+```
+
+2. Configure frontend env:
+
+```bash
+cp .env.example .env.local
+```
+
+3. Configure functions env:
+
+```bash
+cp functions/.env.example functions/.env.local
+```
+
+4. Start frontend:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Firebase CLI setup
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Project configured: `vikna-service-prod`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+firebase use vikna-service-prod
+```
 
-## Learn More
+### LiqPay secrets
 
-To learn more about Next.js, take a look at the following resources:
+Preferred (Blaze plan required):
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+firebase functions:secrets:set LIQPAY_PUBLIC_KEY --project vikna-service-prod
+firebase functions:secrets:set LIQPAY_PRIVATE_KEY --project vikna-service-prod
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+If Blaze is not enabled yet, use `functions/.env.local` temporarily.
 
-## Deploy on Vercel
+## Functions endpoints
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `createCheckoutPayload` (POST): validates order data and returns `data/signature`
+- `liqpayCallback` (POST): verifies signature and logs payment status
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Scripts
+
+```bash
+npm run dev
+npm run build
+npm run lint
+npm run functions:build
+npm run functions:lint
+```
+
+## Deploy
+
+### Functions
+
+```bash
+firebase deploy --only functions --project vikna-service-prod
+```
+
+### Netlify
+
+1. Connect GitHub repo to Netlify.
+2. Build command: `npm run build`
+3. Publish handled by Next.js plugin.
+4. Set env vars in Netlify:
+   - `NEXT_PUBLIC_SITE_URL=https://vikna-service.run.place`
+   - `NEXT_PUBLIC_FIREBASE_FUNCTIONS_BASE_URL=https://europe-west1-vikna-service-prod.cloudfunctions.net`
+5. Set custom domain `vikna-service.run.place` as primary.
+6. DNS: create CNAME `vikna-service` -> `<netlify-site>.netlify.app`.
+
+## Payment result route
+
+- `/payment/result`
+
+## Notes
+
+- LiqPay `private_key` is never exposed to the browser.
+- `paypart/moment_part` visibility depends on merchant settings in LiqPay cabinet.
+- Rotate sandbox keys before production go-live.

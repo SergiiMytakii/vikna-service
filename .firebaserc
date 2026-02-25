@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "default": "vikna-service-prod",
+    "prod": "vikna-service-prod"
+  },
+  "targets": {},
+  "etags": {}
+}
