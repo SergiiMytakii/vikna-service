@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:local": "NEXT_PUBLIC_SITE_URL=http://localhost:3000 NEXT_PUBLIC_FIREBASE_FUNCTIONS_BASE_URL=http://127.0.0.1:5001/vikna-service-prod/europe-west1 next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "emulators:functions": "firebase emulators:start --only functions",
     "functions:build": "npm --prefix functions run build",
     "functions:lint": "npm --prefix functions run lint"
   },

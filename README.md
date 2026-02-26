@@ -11,11 +11,11 @@
 ## What is implemented
 
 - Головна сторінка українською мовою з брендингом.
-- Форма оплати:
-  - тип товару
-  - кількість
-  - ціна
-  - режим оплати: `Оплата частинами`, `Миттєва розстрочка`, `Повна оплата`
+- Каталог з фіксованими цінами за м² та кнопками:
+  - `Купити` (повна оплата)
+  - `Оплата частинами`
+  - `Миттєва розстрочка`
+- Модальне вікно оплати з вводом площі (м²) і автоматичним розрахунком суми.
 - Сторінка результату оплати `/payment/result` з опитуванням фінального статусу через бекенд.
 - Перевірка callback підпису LiqPay на бекенді.
 - Каталог товарів (назва, ціна, фото, опис).
@@ -46,36 +46,35 @@
   - `src/app/page.tsx` - головна сторінка
   - `src/app/payment/result` - статус після оплати
   - `src/app/public-offer` - публічний договір (оферта)
-- `src/components/payment-form.tsx` - форма оплати
+- `src/components/product-catalog.tsx` - каталог + кнопки оплати + модальне вікно
 - `functions/src/index.ts` - Firebase HTTP functions
 - `functions/src/lib/liqpay.ts` - утиліти підпису/валідації LiqPay
 - `public/products/*` - фото товарів
 
 ## Environment variables
 
-### Frontend (`.env.local`)
+### Frontend локально (`.env.local`)
 
-Скопіюйте з `.env.example`:
+Локально використовується Functions Emulator:
 
-```bash
-cp .env.example .env.local
-```
+- `NEXT_PUBLIC_SITE_URL=http://localhost:3000`
+- `NEXT_PUBLIC_FIREBASE_FUNCTIONS_BASE_URL=http://127.0.0.1:5001/vikna-service-prod/europe-west1`
 
-Required:
+Для production build використовуйте `.env.production` лише з `NEXT_PUBLIC_*` змінними.
 
-- `NEXT_PUBLIC_SITE_URL` (наприклад `https://vikna-service.run.place` або `https://vikna-service-prod.web.app`)
-- `NEXT_PUBLIC_FIREBASE_FUNCTIONS_BASE_URL` (наприклад `https://europe-west1-vikna-service-prod.cloudfunctions.net`)
+### Functions (prod vs local)
 
-### Functions (local fallback only)
+Prod (live):
+- LiqPay ключі беруться з **Firebase Secrets**:
+  - `LIQPAY_PUBLIC_KEY`
+  - `LIQPAY_PRIVATE_KEY`
 
-Для локальних тестів можна використовувати `.env` у `functions/` (або змінні середовища), але в проді використовуйте **Firebase Secrets**.
-
-Ключі/налаштування:
-- `LIQPAY_PUBLIC_KEY`
-- `LIQPAY_PRIVATE_KEY`
-- `SITE_URL`
-- `FUNCTIONS_BASE_URL`
-- `ALLOWED_ORIGINS`
+Local:
+- sandbox ключі з `functions/.secret.local`
+- локальні env з `functions/.env.local`:
+  - `SITE_URL`
+  - `FUNCTIONS_BASE_URL`
+  - `ALLOWED_ORIGINS`
 
 ## Firebase configuration
 
@@ -94,16 +93,17 @@ npm install
 npm --prefix functions install
 ```
 
-Run frontend:
+Run frontend only:
 
 ```bash
 npm run dev
 ```
 
-Optional local functions:
+Run local sandbox flow (recommended):
 
 ```bash
-npm --prefix functions run serve
+npm run emulators:functions
+npm run dev:local
 ```
 
 ## Functions endpoints
@@ -143,11 +143,19 @@ firebase login
 firebase use vikna-service-prod
 ```
 
-### 2) Set LiqPay secrets (required for prod)
+### 2) Set LiqPay secrets (required for prod/live)
 
 ```bash
 firebase functions:secrets:set LIQPAY_PUBLIC_KEY --project vikna-service-prod
 firebase functions:secrets:set LIQPAY_PRIVATE_KEY --project vikna-service-prod
+```
+
+Або з локального `.env.production`:
+
+```bash
+set -a; source .env.production; set +a
+printf '%s' "$LIQPAY_PUBLIC_KEY" | firebase functions:secrets:set LIQPAY_PUBLIC_KEY --project vikna-service-prod --data-file=-
+printf '%s' "$LIQPAY_PRIVATE_KEY" | firebase functions:secrets:set LIQPAY_PRIVATE_KEY --project vikna-service-prod --data-file=-
 ```
 
 ### 3) Deploy functions and hosting
@@ -180,4 +188,4 @@ firebase deploy --only functions --project vikna-service-prod
 - `LIQPAY_PRIVATE_KEY` ніколи не передається у браузер.
 - Підпис LiqPay перевіряється на callback endpoint.
 - CORS обмежений allowlist-ом доменів.
-- Перед live запуском обов'язково замінити sandbox keys на production keys.
+- Для live ключі LiqPay мають бути задані тільки через Firebase Secrets.
