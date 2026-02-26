@@ -303,19 +303,7 @@ h2 {
   padding: 0.75rem 0.8rem;
   background: #fafafa;
   display: grid;
-  gap: 0.62rem;
-}
-
-.installment-line {
-  border-top: 1px solid #e5e5e6;
-  padding-top: 0.55rem;
-  display: flex;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.installment-line strong {
-  color: var(--brand-red);
+  gap: 0.48rem;
 }
 
 .installment-hint {

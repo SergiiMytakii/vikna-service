@@ -10,6 +10,10 @@ const SUCCESS_STATES = new Set([
   "subscribed",
   "wait_compensation",
 ]);
+const APPROVED_STATES = new Set([
+  "wait_accept",
+  "hold_wait",
+]);
 const FAILURE_STATES = new Set(["error", "failure", "reversed", "unsubscribed"]);
 const PENDING_STATES = new Set([
   "3ds_verify",
@@ -30,7 +34,6 @@ const PENDING_STATES = new Set([
   "invoice_wait",
   "prepared",
   "processing",
-  "wait_accept",
   "wait_card",
   "wait_lc",
   "wait_reserve",
@@ -61,7 +64,7 @@ export function ResultContent() {
   const [error, setError] = useState("");
 
   const statusKind = useMemo(() => {
-    if (SUCCESS_STATES.has(status)) {
+    if (SUCCESS_STATES.has(status) || APPROVED_STATES.has(status)) {
       return "ok";
     }
 
@@ -182,7 +185,11 @@ export function ResultContent() {
 }
 
 function isFinalState(status: string): boolean {
-  return SUCCESS_STATES.has(status) || FAILURE_STATES.has(status);
+  return (
+    SUCCESS_STATES.has(status) ||
+    APPROVED_STATES.has(status) ||
+    FAILURE_STATES.has(status)
+  );
 }
 
 function titleByStatus(statusKind: string, isLoading: boolean): string {
@@ -191,6 +198,12 @@ function titleByStatus(statusKind: string, isLoading: boolean): string {
   }
 
   if (statusKind === "ok") {
+    if (status === "wait_accept") {
+      return "Підтверджено клієнтом";
+    }
+    if (status === "hold_wait") {
+      return "Підтверджено, завершуємо оплату";
+    }
     return "Оплату підтверджено";
   }
 
@@ -211,6 +224,12 @@ function descriptionByStatus(
   }
 
   if (statusKind === "ok") {
+    if (status === "wait_accept") {
+      return "Клієнт успішно підтвердив платіж. Фінальна проводка виконується LiqPay автоматично.";
+    }
+    if (status === "hold_wait") {
+      return "Платіж підтверджено. Завершуємо фінальне списання в LiqPay.";
+    }
     if (status === "wait_compensation") {
       return "Платіж успішний. Кошти будуть зараховані в щодобовій проводці LiqPay.";
     }
@@ -219,10 +238,6 @@ function descriptionByStatus(
 
   if (statusKind === "fail") {
     return "Якщо кошти списані, але статус неуспішний, зверніться до нас для перевірки.";
-  }
-
-  if (status === "wait_accept") {
-    return "Оплата проведена клієнтом. Очікується завершення перевірки магазину в LiqPay.";
   }
 
   if (PENDING_STATES.has(status)) {
@@ -242,7 +257,8 @@ function formatStatus(status: string): string {
     wait_compensation: "Успішно, очікується зарахування",
     processing: "Обробляється",
     prepared: "Створено, очікується завершення",
-    wait_accept: "Оплачено, очікується перевірка магазину",
+    wait_accept: "Підтверджено клієнтом",
+    hold_wait: "Очікує фінального списання",
     wait_reserve: "Резервування коштів",
     wait_secure: "Платіж на перевірці",
     failure: "Неуспішно",

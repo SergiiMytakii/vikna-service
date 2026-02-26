@@ -10,6 +10,7 @@ import {
   decodeBase64ToJson,
   encodePayloadToBase64,
   getHttpsProtocol,
+  type LiqPayPayload,
   normalizeCheckoutInput,
   normalizeUrl,
   verifySignature,
@@ -24,6 +25,8 @@ const PROD_ORIGINS = [
   "https://vikna-service-prod.web.app",
   "https://vikna-service-prod.firebaseapp.com",
 ];
+const LIQPAY_API_URL = "https://www.liqpay.ua/api/request";
+const INSTALLMENT_PAYTYPES = new Set(["paypart", "moment_part"]);
 const LIQPAY_PUBLIC_KEY_SECRET = defineSecret("LIQPAY_PUBLIC_KEY");
 const LIQPAY_PRIVATE_KEY_SECRET = defineSecret("LIQPAY_PRIVATE_KEY");
 
@@ -100,19 +103,26 @@ export const createCheckoutPayload = onRequest({
 });
 
 export const liqpayCallback = onRequest({
-  secrets: [LIQPAY_PRIVATE_KEY_SECRET],
-}, (request, response) => {
+  secrets: [LIQPAY_PUBLIC_KEY_SECRET, LIQPAY_PRIVATE_KEY_SECRET],
+}, async (request, response) => {
   if (request.method !== "POST") {
     response.status(405).json({error: "Method not allowed"});
     return;
   }
 
+  const publicKey = getConfigValue(
+    LIQPAY_PUBLIC_KEY_SECRET,
+    "LIQPAY_PUBLIC_KEY"
+  );
   const privateKey = getConfigValue(
     LIQPAY_PRIVATE_KEY_SECRET,
     "LIQPAY_PRIVATE_KEY"
   );
-  if (!privateKey) {
-    logger.error("liqpay_private_key_missing");
+  if (!publicKey || !privateKey) {
+    logger.error("liqpay_keys_missing_for_callback", {
+      hasPublicKey: Boolean(publicKey),
+      hasPrivateKey: Boolean(privateKey),
+    });
     response.status(500).send("private key missing");
     return;
   }
@@ -136,15 +146,57 @@ export const liqpayCallback = onRequest({
 
   try {
     const decoded = decodeBase64ToJson(parsed.data) as Record<string, unknown>;
+    const status = toLowerString(decoded.status);
+    const paytype = toLowerString(decoded.paytype);
+    const orderId = toStringOrEmpty(decoded.order_id);
+    const amount = toPositiveNumber(decoded.amount);
 
     logger.info("liqpay_callback_verified", {
-      orderId: decoded.order_id,
-      status: decoded.status,
-      amount: decoded.amount,
+      orderId,
+      status,
+      amount: amount ?? decoded.amount,
+      paytype: paytype || undefined,
       currency: decoded.currency,
       signatureAlgorithm: validation.algorithm,
       liqpayOrderId: decoded.liqpay_order_id,
     });
+
+    if (
+      status === "hold_wait" &&
+      INSTALLMENT_PAYTYPES.has(paytype) &&
+      orderId &&
+      amount !== null
+    ) {
+      try {
+        const completionPayload: LiqPayPayload = {
+          action: "hold_completion",
+          version: 3,
+          public_key: publicKey,
+          order_id: orderId,
+          amount,
+        };
+        const completion = await callLiqPayApi(completionPayload, privateKey);
+
+        logger.info("liqpay_hold_completion_requested", {
+          source: "callback",
+          orderId,
+          statusBefore: status,
+          paytype,
+          completionStatus: completion.status,
+          completionResult: completion.result,
+          completionErrorCode: completion.err_code,
+          completionErrorDescription: completion.err_description,
+        });
+      } catch (error) {
+        logger.error("liqpay_hold_completion_failed", {
+          source: "callback",
+          orderId,
+          statusBefore: status,
+          paytype,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }
 
     response.status(200).send("ok");
   } catch (error) {
@@ -201,23 +253,49 @@ export const getPaymentStatus = onRequest({
 
   try {
     const statusPayload = buildStatusPayload(orderId, publicKey);
-    const data = encodePayloadToBase64(statusPayload);
-    const signature = createSignatureSha1(data, privateKey);
+    let payload = await callLiqPayApi(statusPayload, privateKey);
+    const status = toLowerString(payload.status);
+    const paytype = toLowerString(payload.paytype);
+    const statusAmount = toPositiveNumber(payload.amount);
 
-    const apiResponse = await fetch("https://www.liqpay.ua/api/request", {
-      method: "POST",
-      headers: {"Content-Type": "application/x-www-form-urlencoded"},
-      body: new URLSearchParams({data, signature}).toString(),
-    });
+    if (
+      status === "hold_wait" &&
+      INSTALLMENT_PAYTYPES.has(paytype) &&
+      statusAmount !== null
+    ) {
+      try {
+        const completionPayload: LiqPayPayload = {
+          action: "hold_completion",
+          version: 3,
+          public_key: publicKey,
+          order_id: orderId,
+          amount: statusAmount,
+        };
+        const completion = await callLiqPayApi(completionPayload, privateKey);
 
-    if (!apiResponse.ok) {
-      response.status(502).json({
-        error: "Не вдалося отримати статус від LiqPay",
-      });
-      return;
+        logger.info("liqpay_hold_completion_requested", {
+          source: "status_poll",
+          orderId,
+          statusBefore: status,
+          paytype,
+          completionStatus: completion.status,
+          completionResult: completion.result,
+          completionErrorCode: completion.err_code,
+          completionErrorDescription: completion.err_description,
+        });
+
+        payload = await callLiqPayApi(statusPayload, privateKey);
+      } catch (error) {
+        logger.error("liqpay_hold_completion_failed", {
+          source: "status_poll",
+          orderId,
+          statusBefore: status,
+          paytype,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
     }
 
-    const payload = await apiResponse.json() as Record<string, unknown>;
     response.status(200).json({
       result: payload.result,
       status: payload.status,
@@ -310,6 +388,42 @@ function resolveFunctionsBaseUrl(
   }
 
   return `${protocol}://${host}`;
+}
+
+async function callLiqPayApi(
+  payload: LiqPayPayload,
+  privateKey: string
+): Promise<Record<string, unknown>> {
+  const data = encodePayloadToBase64(payload);
+  const signature = createSignatureSha1(data, privateKey);
+
+  const apiResponse = await fetch(LIQPAY_API_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/x-www-form-urlencoded"},
+    body: new URLSearchParams({data, signature}).toString(),
+  });
+
+  if (!apiResponse.ok) {
+    throw new Error("Не вдалося отримати відповідь від LiqPay");
+  }
+
+  return await apiResponse.json() as Record<string, unknown>;
+}
+
+function toLowerString(value: unknown): string {
+  return `${value ?? ""}`.trim().toLowerCase();
+}
+
+function toStringOrEmpty(value: unknown): string {
+  return `${value ?? ""}`.trim();
+}
+
+function toPositiveNumber(value: unknown): number | null {
+  const normalized = Number(value);
+  if (!Number.isFinite(normalized) || normalized <= 0) {
+    return null;
+  }
+  return normalized;
 }
 
 function getConfigValue(

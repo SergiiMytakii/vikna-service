@@ -122,16 +122,6 @@ export function ProductCatalog() {
     }
     return Math.round((baseTotal * (100 + clientSurchargeRate)) / 100 * 100) / 100;
   }, [baseTotal, clientSurchargeRate, isInstallment]);
-  const clientSurchargeAmount = useMemo(() => {
-    return Math.max(0, Math.round((total - baseTotal) * 100) / 100);
-  }, [baseTotal, total]);
-  const monthlyEstimate = useMemo(() => {
-    const count = Number(installmentCount);
-    if (!isInstallment || !Number.isFinite(count) || count <= 0) {
-      return 0;
-    }
-    return Math.round((total / count) * 100) / 100;
-  }, [installmentCount, isInstallment, total]);
 
   function openDialog(product: Product, method: PaymentMethod) {
     setActiveProduct(product);
@@ -323,7 +313,7 @@ export function ProductCatalog() {
               {isInstallment ? (
                 <div className="installment-box">
                   <label>
-                    Бажана кількість платежів (орієнтовно)
+                    Кількість платежів
                     <select
                       value={installmentCount}
                       onChange={(event) => setInstallmentCount(event.target.value)}
@@ -335,29 +325,8 @@ export function ProductCatalog() {
                       ))}
                     </select>
                   </label>
-                  <div className="installment-line">
-                    <span>Орієнтовний щомісячний платіж:</span>
-                    <strong>{monthlyEstimate.toFixed(2)} грн/міс</strong>
-                  </div>
-                  <div className="installment-line">
-                    <span>Комісія сервісу ({Number(installmentCount)} пл.):</span>
-                    <strong>{serviceRate.toFixed(1)}%</strong>
-                  </div>
-                  <div className="installment-line">
-                    <span>За рахунок продавця:</span>
-                    <strong>{Math.min(serviceRate, SELLER_COVERAGE_RATE).toFixed(1)}%</strong>
-                  </div>
-                  <div className="installment-line">
-                    <span>Удорожчання для клієнта:</span>
-                    <strong>
-                      {clientSurchargeRate.toFixed(1)}%
-                      {clientSurchargeAmount > 0 ? ` (+${clientSurchargeAmount.toFixed(2)} грн)` : ""}
-                    </strong>
-                  </div>
                   <p className="installment-hint">
-                    До 4 платежів включно сума для клієнта без удорожчання.
-                    Остаточну кількість платежів, перший внесок і графік
-                    клієнт обирає на сторінці LiqPay.
+                    Перший внесок і фінальний графік платежів клієнт підтверджує на сторінці LiqPay.
                   </p>
                 </div>
               ) : null}
