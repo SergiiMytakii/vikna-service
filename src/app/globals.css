@@ -283,9 +283,45 @@ h2 {
   background: #fff;
 }
 
-.payment-modal-form input:focus-visible {
+.payment-modal-form select {
+  border: 1px solid #d9d9db;
+  border-radius: 10px;
+  padding: 0.78rem 0.9rem;
+  font-size: 1rem;
+  background: #fff;
+}
+
+.payment-modal-form input:focus-visible,
+.payment-modal-form select:focus-visible {
   outline: 2px solid rgba(237, 48, 43, 0.35);
   border-color: var(--brand-red);
+}
+
+.installment-box {
+  border: 1px solid #ececed;
+  border-radius: 12px;
+  padding: 0.75rem 0.8rem;
+  background: #fafafa;
+  display: grid;
+  gap: 0.62rem;
+}
+
+.installment-line {
+  border-top: 1px solid #e5e5e6;
+  padding-top: 0.55rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.installment-line strong {
+  color: var(--brand-red);
+}
+
+.installment-hint {
+  color: #5f5f5f;
+  font-size: 0.9rem;
+  line-height: 1.38;
 }
 
 .card {

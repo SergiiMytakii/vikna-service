@@ -24,6 +24,7 @@ interface Product {
 
 const FUNCTIONS_BASE_URL =
   process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_BASE_URL || "";
+const INSTALLMENT_COUNTS = Array.from({length: 24}, (_, index) => index + 2);
 
 const products: Product[] = [
   {
@@ -53,6 +54,7 @@ export function ProductCatalog() {
   const [activeProduct, setActiveProduct] = useState<Product | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("full");
   const [area, setArea] = useState("1");
+  const [installmentCount, setInstallmentCount] = useState("6");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -68,11 +70,20 @@ export function ProductCatalog() {
 
     return Math.round(parsedArea * activeProduct.unitPrice * 100) / 100;
   }, [activeProduct, area]);
+  const isInstallment = paymentMethod === "paypart" || paymentMethod === "moment_part";
+  const monthlyEstimate = useMemo(() => {
+    const count = Number(installmentCount);
+    if (!isInstallment || !Number.isFinite(count) || count <= 0) {
+      return 0;
+    }
+    return Math.round((total / count) * 100) / 100;
+  }, [installmentCount, isInstallment, total]);
 
   function openDialog(product: Product, method: PaymentMethod) {
     setActiveProduct(product);
     setPaymentMethod(method);
     setArea("1");
+    setInstallmentCount("6");
     setError("");
     setIsLoading(false);
   }
@@ -243,6 +254,33 @@ export function ProductCatalog() {
                 <span>Сума до оплати:</span>
                 <strong>{total.toFixed(2)} грн</strong>
               </div>
+
+              {isInstallment ? (
+                <div className="installment-box">
+                  <label>
+                    Бажана кількість платежів (орієнтовно)
+                    <select
+                      value={installmentCount}
+                      onChange={(event) => setInstallmentCount(event.target.value)}
+                    >
+                      {INSTALLMENT_COUNTS.map((count) => (
+                        <option key={count} value={count}>
+                          {count} платежів
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="installment-line">
+                    <span>Орієнтовний щомісячний платіж:</span>
+                    <strong>{monthlyEstimate.toFixed(2)} грн/міс</strong>
+                  </div>
+                  <p className="installment-hint">
+                    Остаточну кількість платежів, перший внесок і графік
+                    клієнт обирає на сторінці LiqPay. Зазвичай доступно від 2 до
+                    25 платежів залежно від ліміту клієнта та налаштувань магазину.
+                  </p>
+                </div>
+              ) : null}
 
               {error ? <p className="form-error">{error}</p> : null}
 

@@ -75,6 +75,8 @@ export function buildCheckoutPayload(
   const orderId = generateOrderId();
   const resultUrlWithOrder = appendOrderIdToResultUrl(resultUrl, orderId);
 
+  const paytypes = toLiqPayPaytypes(normalized.paymentMethod);
+
   return {
     version: 3,
     public_key: publicKey,
@@ -84,7 +86,7 @@ export function buildCheckoutPayload(
     description,
     order_id: orderId,
     language: "uk",
-    paytypes: toLiqPayPaytypes(normalized.paymentMethod),
+    ...(paytypes ? {paytypes} : {}),
     result_url: resultUrlWithOrder,
     server_url: serverUrl,
   };
@@ -169,7 +171,7 @@ function appendOrderIdToResultUrl(resultUrl: string, orderId: string): string {
   return `${resultUrl}${separator}order_id=${encodeURIComponent(orderId)}`;
 }
 
-function toLiqPayPaytypes(paymentMethod: PaymentMethod): string {
+function toLiqPayPaytypes(paymentMethod: PaymentMethod): string | undefined {
   switch (paymentMethod) {
   case "paypart":
     return "paypart";
@@ -177,7 +179,7 @@ function toLiqPayPaytypes(paymentMethod: PaymentMethod): string {
     return "moment_part";
   case "full":
   default:
-    return "card,privat24";
+    return undefined;
   }
 }
 
