@@ -3,11 +3,16 @@ import {createHash, randomBytes} from "crypto";
 const LIQPAY_CHECKOUT_ACTION_URL = "https://www.liqpay.ua/api/3/checkout";
 
 export type LiqPayPayload = Record<string, string | number | boolean | object>;
+export type PaymentMethod =
+  | "full"
+  | "paypart"
+  | "moment_part";
 
 export interface CheckoutInput {
   productType: string;
   quantity: number;
   unitPrice: number;
+  paymentMethod?: PaymentMethod | string;
 }
 
 export interface NormalizedCheckoutInput {
@@ -15,6 +20,7 @@ export interface NormalizedCheckoutInput {
   quantity: number;
   unitPrice: number;
   amount: number;
+  paymentMethod: PaymentMethod;
 }
 
 export interface SignatureVerificationResult {
@@ -51,6 +57,7 @@ export function normalizeCheckoutInput(
     quantity,
     unitPrice: unitPriceCents / 100,
     amount: amountCents / 100,
+    paymentMethod: normalizePaymentMethod(input.paymentMethod),
   };
 }
 
@@ -61,6 +68,8 @@ export function buildCheckoutPayload(
   serverUrl: string
 ): LiqPayPayload {
   const description = `${normalized.productType} (${normalized.quantity} шт.)`;
+  const orderId = generateOrderId();
+  const resultUrlWithOrder = appendOrderIdToResultUrl(resultUrl, orderId);
 
   return {
     version: 3,
@@ -69,11 +78,23 @@ export function buildCheckoutPayload(
     amount: normalized.amount,
     currency: "UAH",
     description,
-    order_id: generateOrderId(),
+    order_id: orderId,
     language: "uk",
-    paytypes: "card,privat24,paypart,moment_part",
-    result_url: resultUrl,
+    paytypes: toLiqPayPaytypes(normalized.paymentMethod),
+    result_url: resultUrlWithOrder,
     server_url: serverUrl,
+  };
+}
+
+export function buildStatusPayload(
+  orderId: string,
+  publicKey: string
+): LiqPayPayload {
+  return {
+    action: "status",
+    version: 3,
+    public_key: publicKey,
+    order_id: orderId,
   };
 }
 
@@ -137,6 +158,37 @@ export function getHttpsProtocol(
 function generateOrderId(): string {
   const entropy = randomBytes(5).toString("hex");
   return `VS-${Date.now()}-${entropy}`;
+}
+
+function appendOrderIdToResultUrl(resultUrl: string, orderId: string): string {
+  const separator = resultUrl.includes("?") ? "&" : "?";
+  return `${resultUrl}${separator}order_id=${encodeURIComponent(orderId)}`;
+}
+
+function toLiqPayPaytypes(paymentMethod: PaymentMethod): string {
+  switch (paymentMethod) {
+  case "paypart":
+    return "paypart";
+  case "moment_part":
+    return "moment_part";
+  case "full":
+  default:
+    return "card,privat24";
+  }
+}
+
+function normalizePaymentMethod(value: unknown): PaymentMethod {
+  const method = `${value ?? "full"}`.trim().toLowerCase();
+
+  switch (method) {
+  case "paypart":
+  case "moment_part":
+  case "full":
+  case "all":
+    return method === "all" ? "full" : method;
+  default:
+    return "full";
+  }
 }
 
 function toCents(value: number): number {

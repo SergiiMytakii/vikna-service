@@ -1,8 +1,10 @@
 import * as logger from "firebase-functions/logger";
 import {onRequest} from "firebase-functions/v2/https";
 import {setGlobalOptions} from "firebase-functions/v2/options";
+import {defineSecret} from "firebase-functions/params";
 import {
   buildCheckoutPayload,
+  buildStatusPayload,
   checkoutActionUrl,
   createSignatureSha1,
   decodeBase64ToJson,
@@ -19,9 +21,15 @@ const LOCAL_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"];
 const PROD_ORIGINS = [
   "https://vikna-service.run.place",
   "https://vikna-service.netlify.app",
+  "https://vikna-service-prod.web.app",
+  "https://vikna-service-prod.firebaseapp.com",
 ];
+const LIQPAY_PUBLIC_KEY_SECRET = defineSecret("LIQPAY_PUBLIC_KEY");
+const LIQPAY_PRIVATE_KEY_SECRET = defineSecret("LIQPAY_PRIVATE_KEY");
 
-export const createCheckoutPayload = onRequest((request, response) => {
+export const createCheckoutPayload = onRequest({
+  secrets: [LIQPAY_PUBLIC_KEY_SECRET, LIQPAY_PRIVATE_KEY_SECRET],
+}, (request, response) => {
   applyCors(request.headers.origin, response);
 
   if (request.method === "OPTIONS") {
@@ -39,8 +47,14 @@ export const createCheckoutPayload = onRequest((request, response) => {
     return;
   }
 
-  const publicKey = process.env.LIQPAY_PUBLIC_KEY;
-  const privateKey = process.env.LIQPAY_PRIVATE_KEY;
+  const publicKey = getConfigValue(
+    LIQPAY_PUBLIC_KEY_SECRET,
+    "LIQPAY_PUBLIC_KEY"
+  );
+  const privateKey = getConfigValue(
+    LIQPAY_PRIVATE_KEY_SECRET,
+    "LIQPAY_PRIVATE_KEY"
+  );
 
   if (!publicKey || !privateKey) {
     logger.error("liqpay_keys_missing", {
@@ -85,13 +99,18 @@ export const createCheckoutPayload = onRequest((request, response) => {
   }
 });
 
-export const liqpayCallback = onRequest((request, response) => {
+export const liqpayCallback = onRequest({
+  secrets: [LIQPAY_PRIVATE_KEY_SECRET],
+}, (request, response) => {
   if (request.method !== "POST") {
     response.status(405).json({error: "Method not allowed"});
     return;
   }
 
-  const privateKey = process.env.LIQPAY_PRIVATE_KEY;
+  const privateKey = getConfigValue(
+    LIQPAY_PRIVATE_KEY_SECRET,
+    "LIQPAY_PRIVATE_KEY"
+  );
   if (!privateKey) {
     logger.error("liqpay_private_key_missing");
     response.status(500).send("private key missing");
@@ -134,6 +153,89 @@ export const liqpayCallback = onRequest((request, response) => {
     });
 
     response.status(400).send("invalid data");
+  }
+});
+
+export const getPaymentStatus = onRequest({
+  secrets: [LIQPAY_PUBLIC_KEY_SECRET, LIQPAY_PRIVATE_KEY_SECRET],
+}, async (request, response) => {
+  applyCors(request.headers.origin, response);
+
+  if (request.method === "OPTIONS") {
+    response.status(204).send("");
+    return;
+  }
+
+  if (request.method !== "POST") {
+    response.status(405).json({error: "Method not allowed"});
+    return;
+  }
+
+  if (!isAllowedOrigin(request.headers.origin)) {
+    response.status(403).json({error: "Origin is not allowed"});
+    return;
+  }
+
+  const publicKey = getConfigValue(
+    LIQPAY_PUBLIC_KEY_SECRET,
+    "LIQPAY_PUBLIC_KEY"
+  );
+  const privateKey = getConfigValue(
+    LIQPAY_PRIVATE_KEY_SECRET,
+    "LIQPAY_PRIVATE_KEY"
+  );
+
+  if (!publicKey || !privateKey) {
+    response.status(500).json({
+      error: "Сервер не налаштований для перевірки статусу платежу",
+    });
+    return;
+  }
+
+  const orderId = `${(request.body as {orderId?: string})?.orderId ?? ""}`
+    .trim();
+  if (!orderId) {
+    response.status(400).json({error: "orderId is required"});
+    return;
+  }
+
+  try {
+    const statusPayload = buildStatusPayload(orderId, publicKey);
+    const data = encodePayloadToBase64(statusPayload);
+    const signature = createSignatureSha1(data, privateKey);
+
+    const apiResponse = await fetch("https://www.liqpay.ua/api/request", {
+      method: "POST",
+      headers: {"Content-Type": "application/x-www-form-urlencoded"},
+      body: new URLSearchParams({data, signature}).toString(),
+    });
+
+    if (!apiResponse.ok) {
+      response.status(502).json({
+        error: "Не вдалося отримати статус від LiqPay",
+      });
+      return;
+    }
+
+    const payload = await apiResponse.json() as Record<string, unknown>;
+    response.status(200).json({
+      result: payload.result,
+      status: payload.status,
+      orderId: payload.order_id ?? orderId,
+      amount: payload.amount,
+      currency: payload.currency,
+      paytype: payload.paytype,
+      action: payload.action,
+      liqpayOrderId: payload.liqpay_order_id,
+      errorCode: payload.err_code,
+      errorDescription: payload.err_description,
+    });
+  } catch (error) {
+    logger.error("liqpay_status_failed", {
+      orderId,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    response.status(500).json({error: "Помилка перевірки статусу платежу"});
   }
 });
 
@@ -208,4 +310,23 @@ function resolveFunctionsBaseUrl(
   }
 
   return `${protocol}://${host}`;
+}
+
+function getConfigValue(
+  secret: ReturnType<typeof defineSecret>,
+  envName: string
+): string | undefined {
+  try {
+    const value = secret.value();
+    if (value) {
+      return value;
+    }
+  } catch (error) {
+    logger.debug("secret_unavailable_fallback_to_env", {
+      envName,
+      error: error instanceof Error ? error.message : "Unknown secret error",
+    });
+  }
+
+  return process.env[envName];
 }

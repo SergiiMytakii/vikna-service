@@ -1,4 +1,14 @@
 {
+  "hosting": {
+    "site": "vikna-service-prod",
+    "public": "out",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "cleanUrls": true
+  },
   "functions": [
     {
       "source": "functions",

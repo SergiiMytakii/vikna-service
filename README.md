@@ -1,100 +1,183 @@
-# Вікна-Сервіс Payment Web App
+# Вікна-Сервіс Payment App
 
-Next.js single-page website with LiqPay checkout integration and Firebase Functions backend for secure signature generation and callback verification.
+Вебзастосунок для прийому оплат через LiqPay для компанії «Вікна-Сервіс».
 
-## Tech stack
+Продакшн-архітектура:
+- Frontend: Next.js (App Router, TypeScript)
+- Backend: Firebase Cloud Functions (HTTP endpoints)
+- Hosting: Firebase Hosting (static export `out`)
+- Payments: LiqPay Checkout + callback verification
 
-- Next.js (App Router, TypeScript)
-- Firebase Cloud Functions (TypeScript)
-- LiqPay Checkout (`card, privat24, paypart, moment_part`)
-- Netlify deployment (`vikna-service.run.place`)
+## What is implemented
 
-## Local setup
+- Головна сторінка українською мовою з брендингом.
+- Форма оплати:
+  - тип товару
+  - кількість
+  - ціна
+  - режим оплати: `Оплата частинами`, `Миттєва розстрочка`, `Повна оплата`
+- Сторінка результату оплати `/payment/result` з опитуванням фінального статусу через бекенд.
+- Перевірка callback підпису LiqPay на бекенді.
+- Каталог товарів (назва, ціна, фото, опис).
+- Юридичні блоки для модерації LiqPay:
+  - інформація про продавця
+  - умови доставки/монтажу/повернення
+  - окрема сторінка публічної оферти `/public-offer`
 
-1. Install dependencies:
+## LiqPay flow
+
+1. Frontend викликає `createCheckoutPayload`.
+2. Function формує `data/signature` приватним ключем і повертає їх.
+3. Frontend робить POST форму на `https://www.liqpay.ua/api/3/checkout`.
+4. LiqPay надсилає server-to-server callback на `liqpayCallback`.
+5. Result page викликає `getPaymentStatus` за `order_id` до фінального статусу.
+
+## Payment modes mapping
+
+- `paypart` -> `paytypes: paypart`
+- `moment_part` -> `paytypes: moment_part`
+- `full` -> `paytypes: card,privat24`
+
+Примітка: кількість платежів/перший внесок для «Оплата частинами» задаються на стороні LiqPay/кабінету мерчанта, а не полями Checkout API.
+
+## Project structure
+
+- `src/app` - Next.js routes
+  - `src/app/page.tsx` - головна сторінка
+  - `src/app/payment/result` - статус після оплати
+  - `src/app/public-offer` - публічний договір (оферта)
+- `src/components/payment-form.tsx` - форма оплати
+- `functions/src/index.ts` - Firebase HTTP functions
+- `functions/src/lib/liqpay.ts` - утиліти підпису/валідації LiqPay
+- `public/products/*` - фото товарів
+
+## Environment variables
+
+### Frontend (`.env.local`)
+
+Скопіюйте з `.env.example`:
+
+```bash
+cp .env.example .env.local
+```
+
+Required:
+
+- `NEXT_PUBLIC_SITE_URL` (наприклад `https://vikna-service.run.place` або `https://vikna-service-prod.web.app`)
+- `NEXT_PUBLIC_FIREBASE_FUNCTIONS_BASE_URL` (наприклад `https://europe-west1-vikna-service-prod.cloudfunctions.net`)
+
+### Functions (local fallback only)
+
+Для локальних тестів можна використовувати `.env` у `functions/` (або змінні середовища), але в проді використовуйте **Firebase Secrets**.
+
+Ключі/налаштування:
+- `LIQPAY_PUBLIC_KEY`
+- `LIQPAY_PRIVATE_KEY`
+- `SITE_URL`
+- `FUNCTIONS_BASE_URL`
+- `ALLOWED_ORIGINS`
+
+## Firebase configuration
+
+В репозиторії вже налаштовано:
+- `.firebaserc` -> project `vikna-service-prod`
+- `firebase.json`:
+  - Hosting `public: out`
+  - Functions predeploy lint/build
+
+## Local development
+
+Install:
 
 ```bash
 npm install
 npm --prefix functions install
 ```
 
-2. Configure frontend env:
-
-```bash
-cp .env.example .env.local
-```
-
-3. Configure functions env:
-
-```bash
-cp functions/.env.example functions/.env.local
-```
-
-4. Start frontend:
+Run frontend:
 
 ```bash
 npm run dev
 ```
 
-## Firebase CLI setup
-
-Project configured: `vikna-service-prod`.
+Optional local functions:
 
 ```bash
+npm --prefix functions run serve
+```
+
+## Functions endpoints
+
+Base URL (prod):
+`https://europe-west1-vikna-service-prod.cloudfunctions.net`
+
+Endpoints:
+
+- `POST /createCheckoutPayload`
+  - Input: `productType`, `quantity`, `unitPrice`, `paymentMethod`
+  - Output: `actionUrl`, `data`, `signature`, `orderId`, `amount`, `currency`
+
+- `POST /liqpayCallback`
+  - Input (from LiqPay): `data`, `signature`
+  - Action: signature verify + structured logs
+
+- `POST /getPaymentStatus`
+  - Input: `orderId`
+  - Action: server-side request to LiqPay `action=status`
+
+## Build and checks
+
+```bash
+npm run lint
+npm run build
+npm run functions:lint
+npm run functions:build
+```
+
+## Deploy to Firebase
+
+### 1) Login and select project
+
+```bash
+firebase login
 firebase use vikna-service-prod
 ```
 
-### LiqPay secrets
-
-Preferred (Blaze plan required):
+### 2) Set LiqPay secrets (required for prod)
 
 ```bash
 firebase functions:secrets:set LIQPAY_PUBLIC_KEY --project vikna-service-prod
 firebase functions:secrets:set LIQPAY_PRIVATE_KEY --project vikna-service-prod
 ```
 
-If Blaze is not enabled yet, use `functions/.env.local` temporarily.
-
-## Functions endpoints
-
-- `createCheckoutPayload` (POST): validates order data and returns `data/signature`
-- `liqpayCallback` (POST): verifies signature and logs payment status
-
-## Scripts
+### 3) Deploy functions and hosting
 
 ```bash
-npm run dev
-npm run build
-npm run lint
-npm run functions:build
-npm run functions:lint
+firebase deploy --only functions,hosting --project vikna-service-prod
 ```
 
-## Deploy
+### 4) Deploy only hosting (frontend-only changes)
 
-### Functions
+```bash
+npm run build
+firebase deploy --only hosting --project vikna-service-prod
+```
+
+### 5) Deploy only functions (backend-only changes)
 
 ```bash
 firebase deploy --only functions --project vikna-service-prod
 ```
 
-### Netlify
+## Production URL
 
-1. Connect GitHub repo to Netlify.
-2. Build command: `npm run build`
-3. Publish handled by Next.js plugin.
-4. Set env vars in Netlify:
-   - `NEXT_PUBLIC_SITE_URL=https://vikna-service.run.place`
-   - `NEXT_PUBLIC_FIREBASE_FUNCTIONS_BASE_URL=https://europe-west1-vikna-service-prod.cloudfunctions.net`
-5. Set custom domain `vikna-service.run.place` as primary.
-6. DNS: create CNAME `vikna-service` -> `<netlify-site>.netlify.app`.
+- Firebase Hosting: `https://vikna-service-prod.web.app`
 
-## Payment result route
+(Якщо використовується кастомний домен, він має бути підв'язаний у Firebase Hosting і DNS.)
 
-- `/payment/result`
+## Security notes
 
-## Notes
-
-- LiqPay `private_key` is never exposed to the browser.
-- `paypart/moment_part` visibility depends on merchant settings in LiqPay cabinet.
-- Rotate sandbox keys before production go-live.
+- `LIQPAY_PRIVATE_KEY` ніколи не передається у браузер.
+- Підпис LiqPay перевіряється на callback endpoint.
+- CORS обмежений allowlist-ом доменів.
+- Перед live запуском обов'язково замінити sandbox keys на production keys.

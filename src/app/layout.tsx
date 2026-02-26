@@ -16,6 +16,11 @@ export const metadata: Metadata = {
   title: "Вікна-Сервіс | Оплата через LiqPay",
   description:
     "Продаж та монтаж вікон, дверей і сонцезахисту. Онлайн-оплата замовлення через LiqPay.",
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/icon.png",
+  },
 };
 
 export default function RootLayout({

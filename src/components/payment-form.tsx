@@ -1,6 +1,7 @@
 "use client";
 
 import {FormEvent, useMemo, useState} from "react";
+type PaymentMethod = "full" | "paypart" | "moment_part";
 
 interface ApiSuccess {
   actionUrl: string;
@@ -22,6 +23,7 @@ export function PaymentForm() {
   const [productType, setProductType] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [unitPrice, setUnitPrice] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("paypart");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -88,6 +90,7 @@ export function PaymentForm() {
             productType: trimmedProduct,
             quantity: parsedQuantity,
             unitPrice: parsedUnitPrice,
+            paymentMethod,
           }),
         }
       );
@@ -172,6 +175,26 @@ export function PaymentForm() {
           />
         </label>
       </div>
+
+      <label>
+        Режим оплати
+        <select
+          value={paymentMethod}
+          onChange={(event) =>
+            setPaymentMethod(event.target.value as PaymentMethod)}
+        >
+          <option value="paypart">Оплата частинами</option>
+          <option value="moment_part">Миттєва розстрочка</option>
+          <option value="full">Повна оплата</option>
+        </select>
+      </label>
+
+      {(paymentMethod === "paypart" || paymentMethod === "moment_part") ? (
+        <p className="form-hint">
+          Кількість платежів і перший внесок покупець обирає на сторінці LiqPay.
+          Доступні варіанти залежать від ваших налаштувань у кабінеті LiqPay.
+        </p>
+      ) : null}
 
       <div className="total-line">
         <span>Сума до оплати:</span>
