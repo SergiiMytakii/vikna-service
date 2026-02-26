@@ -4,7 +4,7 @@ import Image from "next/image";
 import {FormEvent, useMemo, useState} from "react";
 import {getFunctionsBaseUrl} from "@/lib/functions-base-url";
 
-type PaymentMethod = "full" | "paypart" | "moment_part";
+type PaymentMethod = "full" | "paypart";
 
 interface ApiSuccess {
   actionUrl: string;
@@ -97,7 +97,7 @@ export function ProductCatalog() {
 
     return Math.round(parsedArea * activeProduct.unitPrice * 100) / 100;
   }, [activeProduct, area]);
-  const isInstallment = paymentMethod === "paypart" || paymentMethod === "moment_part";
+  const isInstallment = paymentMethod === "paypart";
   const serviceRate = useMemo(() => {
     if (!isInstallment) {
       return 0;
@@ -256,13 +256,6 @@ export function ProductCatalog() {
                   />
                   Оплата частинами
                 </button>
-                <button
-                  className="btn btn-secondary product-method-btn"
-                  type="button"
-                  onClick={() => openDialog(product, "moment_part")}
-                >
-                  Миттєва розстрочка
-                </button>
               </div>
             </div>
           </article>
@@ -348,8 +341,6 @@ function paymentMethodLabel(method: PaymentMethod): string {
   switch (method) {
   case "paypart":
     return "Оплата частинами";
-  case "moment_part":
-    return "Миттєва розстрочка";
   case "full":
   default:
     return "Повна оплата";

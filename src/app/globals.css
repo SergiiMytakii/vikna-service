@@ -200,7 +200,7 @@ h2 {
 
 .product-methods-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 0.55rem;
 }
 

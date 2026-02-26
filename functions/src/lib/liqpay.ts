@@ -218,7 +218,7 @@ function appendOrderIdToResultUrl(resultUrl: string, orderId: string): string {
 function toLiqPayPaytypes(paymentMethod: PaymentMethod): string | undefined {
   switch (paymentMethod) {
   case "paypart":
-    return "paypart";
+    return "paypart,moment_part";
   case "moment_part":
     return "moment_part";
   case "full":

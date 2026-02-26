@@ -123,7 +123,7 @@ export const liqpayCallback = onRequest({
       hasPublicKey: Boolean(publicKey),
       hasPrivateKey: Boolean(privateKey),
     });
-    response.status(500).send("private key missing");
+    response.status(500).send("keys missing");
     return;
   }
 

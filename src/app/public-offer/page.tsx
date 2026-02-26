@@ -30,10 +30,7 @@ export default function PublicOfferPage() {
             <li>
               Контакти:{" "}
               <a href="tel:+380677774027">067-777-40-27</a>,{" "}
-              <a href="tel:+380972542080">097-254-20-80</a>,{" "}
-              <a href="mailto:serjmitaki@gmail.com">
-                serjmitaki@gmail.com
-              </a>
+              <a href="tel:+380972542080">097-254-20-80</a>
             </li>
           </ul>
         </section>
@@ -87,7 +84,7 @@ export default function PublicOfferPage() {
             </li>
             <li>
               Для ініціювання повернення Покупець подає звернення на телефон або
-              email із зазначенням номера замовлення.
+              месенджер із зазначенням номера замовлення.
             </li>
             <li>
               Після підтвердження підстави для повернення кошти повертаються
