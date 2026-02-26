@@ -30,7 +30,6 @@ const PENDING_STATES = new Set([
   "wait_qr",
   "wait_sender",
   "cash_wait",
-  "hold_wait",
   "invoice_wait",
   "prepared",
   "processing",
