@@ -33,7 +33,7 @@
 
 ## Payment modes mapping
 
-- `paypart` -> `paytypes: paypart`
+- `paypart` -> `paytypes: paypart,moment_part`
 - `full` -> `paytypes` не передається (застосовуються налаштування Checkout у кабінеті LiqPay)
 
 Примітка: кнопка `Оплата частинами` надсилає `paytypes: paypart,moment_part`, тому клієнт обирає `Оплата частинами` або `Миттєва розстрочка` вже на сторінці LiqPay. Кількість платежів/перший внесок також остаточно підтверджуються в LiqPay.
