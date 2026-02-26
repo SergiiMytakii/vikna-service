@@ -81,7 +81,7 @@ export function ProductCatalog() {
   const [activeProduct, setActiveProduct] = useState<Product | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("full");
   const [area, setArea] = useState("1");
-  const [installmentCount, setInstallmentCount] = useState("6");
+  const [installmentCount, setInstallmentCount] = useState("4");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -127,7 +127,7 @@ export function ProductCatalog() {
     setActiveProduct(product);
     setPaymentMethod(method);
     setArea("1");
-    setInstallmentCount("6");
+    setInstallmentCount("4");
     setError("");
     setIsLoading(false);
   }

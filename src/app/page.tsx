@@ -94,6 +94,22 @@ export default function Home() {
                 Instagram
               </a>
             </div>
+            <div className="contact-qr">
+              <p>QR-код сайту</p>
+              <a
+                href="https://vikna-service.run.place"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Відкрити сайт Вікна-Сервіс"
+              >
+                <Image
+                  src="/qr-site.png"
+                  alt="QR-код для переходу на сайт Вікна-Сервіс"
+                  width={132}
+                  height={132}
+                />
+              </a>
+            </div>
           </article>
         </section>
 

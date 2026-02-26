@@ -250,7 +250,7 @@ function getInstallmentPricing(
 
   const installmentCount =
     installmentCountRaw === undefined || installmentCountRaw === null
-      ? 6
+      ? 4
       : Number(installmentCountRaw);
   if (!Number.isInteger(installmentCount)) {
     throw new Error("Кількість платежів має бути цілим числом від 2 до 25");

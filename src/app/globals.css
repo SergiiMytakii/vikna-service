@@ -112,6 +112,27 @@ h2 {
   gap: 0.7rem;
 }
 
+.contact-qr {
+  margin-top: 1rem;
+  display: grid;
+  justify-items: start;
+  gap: 0.45rem;
+}
+
+.contact-qr p {
+  font-size: 0.9rem;
+  color: #535353;
+  font-weight: 700;
+}
+
+.contact-qr a {
+  display: inline-flex;
+  padding: 0.4rem;
+  border-radius: 14px;
+  border: 1px solid #e5e5e7;
+  background: #fff;
+}
+
 .btn {
   border: 1px solid transparent;
   border-radius: 999px;
