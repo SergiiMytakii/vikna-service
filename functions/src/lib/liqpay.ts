@@ -41,20 +41,23 @@ export function normalizeCheckoutInput(
     throw new Error("Поле 'тип товару' є обов'язковим");
   }
 
-  if (!Number.isInteger(quantity) || quantity <= 0 || quantity > 10000) {
-    throw new Error("Кількість має бути цілим числом від 1 до 10000");
+  if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 10000) {
+    throw new Error("Площа має бути додатним числом від 0.01 до 10000 м²");
   }
 
   if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
     throw new Error("Ціна має бути додатним числом");
   }
 
-  const unitPriceCents = toCents(unitPrice);
-  const amountCents = unitPriceCents * quantity;
+  const quantityHundredths = toSquareMetersHundredths(quantity);
+  const unitPriceCents = toMoneyCents(unitPrice);
+  // unitPriceCents * quantityHundredths gives 1/100 of a cent.
+  // Round it back to cents.
+  const amountCents = Math.round((unitPriceCents * quantityHundredths) / 100);
 
   return {
     productType,
-    quantity,
+    quantity: quantityHundredths / 100,
     unitPrice: unitPriceCents / 100,
     amount: amountCents / 100,
     paymentMethod: normalizePaymentMethod(input.paymentMethod),
@@ -67,7 +70,8 @@ export function buildCheckoutPayload(
   resultUrl: string,
   serverUrl: string
 ): LiqPayPayload {
-  const description = `${normalized.productType} (${normalized.quantity} шт.)`;
+  const description =
+    `${normalized.productType} (${formatSquareMeters(normalized.quantity)} м²)`;
   const orderId = generateOrderId();
   const resultUrlWithOrder = appendOrderIdToResultUrl(resultUrl, orderId);
 
@@ -191,7 +195,22 @@ function normalizePaymentMethod(value: unknown): PaymentMethod {
   }
 }
 
-function toCents(value: number): number {
+function toSquareMetersHundredths(value: number): number {
+  const hundredths = Math.round(value * 100);
+  const delta = Math.abs(value * 100 - hundredths);
+
+  if (delta > 0.000001) {
+    throw new Error("Площа може містити не більше 2 знаків після коми");
+  }
+
+  if (hundredths <= 0) {
+    throw new Error("Площа має бути більшою за 0");
+  }
+
+  return hundredths;
+}
+
+function toMoneyCents(value: number): number {
   const cents = Math.round(value * 100);
   const delta = Math.abs(value * 100 - cents);
 
@@ -200,4 +219,8 @@ function toCents(value: number): number {
   }
 
   return cents;
+}
+
+function formatSquareMeters(value: number): string {
+  return value.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
 }

@@ -1,36 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
-import {PaymentForm} from "@/components/payment-form";
+import {ProductCatalog} from "@/components/product-catalog";
 
 const services = [
   "Металопластикові вікна та двері",
   "Вхідні та міжкімнатні двері",
   "Жалюзі, ролети, рулонні штори",
   "Продаж і професійний монтаж під ключ",
-];
-
-const products = [
-  {
-    name: "Металопластикове вікно (поворотно-відкидне)",
-    price: "від 6 800 грн",
-    image: "/products/window.jpg",
-    description:
-      "Енергоефективний профіль, двокамерний склопакет, базова фурнітура. Ціна залежить від розміру та комплектації.",
-  },
-  {
-    name: "Вхідні двері металеві утеплені",
-    price: "від 12 500 грн",
-    image: "/products/door.jpg",
-    description:
-      "Надійні двері для квартири або приватного будинку. Можливі різні варіанти оздоблення та рівня захисту.",
-  },
-  {
-    name: "Рулонні штори / жалюзі",
-    price: "від 950 грн/м²",
-    image: "/products/blinds.jpeg",
-    description:
-      "Системи сонцезахисту для дому та офісу. Доступні моделі день-ніч, класичні рулонні штори та горизонтальні жалюзі.",
-  },
 ];
 
 export default function Home() {
@@ -41,12 +17,12 @@ export default function Home() {
           <p className="eyebrow">Вікна-Сервіс Кілія</p>
           <h1>Надійні вікна, двері та сонцезахист з оплатою онлайн</h1>
           <p className="lead">
-            Розрахуйте вартість замовлення та оплатіть через LiqPay у кілька
+            Оберіть товар, вкажіть площу в м² та сплатіть через LiqPay у кілька
             кроків.
           </p>
           <div className="hero-actions">
-            <a className="btn btn-primary" href="#payment">
-              Перейти до оплати
+            <a className="btn btn-primary" href="#catalog">
+              Перейти до каталогу
             </a>
             <a
               className="btn btn-secondary"
@@ -92,12 +68,10 @@ export default function Home() {
             <h2>Контакти</h2>
             <ul>
               <li>
-                вул. Миру 67, т.{" "}
-                <a href="tel:+380677774027">067-777-40-27</a>
+                вул. Миру 67, т. <a href="tel:+380677774027">067-777-40-27</a>
               </li>
               <li>
-                вул. Торгова 57/а, т.{" "}
-                <a href="tel:+380972542080">097-254-20-80</a>
+                вул. Торгова 57/а, т. <a href="tel:+380972542080">097-254-20-80</a>
               </li>
             </ul>
             <div className="socials">
@@ -126,28 +100,14 @@ export default function Home() {
         <section className="catalog-section" id="catalog">
           <div className="payment-header">
             <p className="eyebrow">Каталог товарів</p>
-            <h2>Товари з актуальним описом та ціною</h2>
+            <h2>Оберіть товар і спосіб оплати</h2>
             <p>
-              Нижче наведені базові моделі. Точна вартість формується після
-              заміру та узгодження параметрів.
+              Ціни фіксовані за м². Після вибору способу оплати введіть площу,
+              щоб отримати фінальну суму.
             </p>
           </div>
 
-          <div className="product-grid">
-            {products.map((product) => (
-              <article className="card product-card" key={product.name}>
-                <Image
-                  src={product.image}
-                  alt={product.name}
-                  width={1200}
-                  height={800}
-                />
-                <h3>{product.name}</h3>
-                <p>{product.description}</p>
-                <p className="product-price">{product.price}</p>
-              </article>
-            ))}
-          </div>
+          <ProductCatalog />
         </section>
 
         <section className="section-grid">
@@ -160,7 +120,6 @@ export default function Home() {
               <li>Адреса офісу 1: вул. Миру 67, м. Кілія, т. 067-777-40-27</li>
               <li>Адреса офісу 2: вул. Торгова 57/а, т. 097-254-20-80</li>
               <li>м. Кілія, 68300</li>
-              
             </ul>
           </article>
 
@@ -189,18 +148,6 @@ export default function Home() {
               <Link href="/public-offer">Публічний договір (оферта)</Link>.
             </p>
           </article>
-        </section>
-
-        <section className="payment-section" id="payment">
-          <div className="payment-header">
-            <p className="eyebrow">Оплата через LiqPay</p>
-            <h2>Заповніть форму та перейдіть до безпечної оплати</h2>
-            <p>
-              Доступні методи: картка, Privat24, Оплата частинами та Миттєва
-              розстрочка.
-            </p>
-          </div>
-          <PaymentForm />
         </section>
       </main>
 
