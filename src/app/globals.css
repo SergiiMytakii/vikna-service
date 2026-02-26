@@ -112,10 +112,23 @@ h2 {
   gap: 0.7rem;
 }
 
-.contact-qr {
+.contact-tools {
   margin-top: 1rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.contact-tools .socials {
+  margin-top: 0;
+}
+
+.contact-qr {
+  margin-top: 0;
   display: grid;
-  justify-items: start;
+  justify-items: center;
   gap: 0.45rem;
 }
 
@@ -127,7 +140,7 @@ h2 {
 
 .contact-qr a {
   display: inline-flex;
-  padding: 0.4rem;
+  padding: 0.35rem;
   border-radius: 14px;
   border: 1px solid #e5e5e7;
   background: #fff;
@@ -172,6 +185,10 @@ h2 {
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
   margin-top: 1rem;
+}
+
+.section-grid-contact {
+  grid-template-columns: 0.85fr 1.15fr;
 }
 
 .catalog-section {

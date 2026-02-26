@@ -90,7 +90,7 @@ export function ProductCatalog() {
       return 0;
     }
 
-    const parsedArea = Number(area);
+    const parsedArea = Number(area.trim().replace(",", "."));
     if (!Number.isFinite(parsedArea) || parsedArea <= 0) {
       return 0;
     }
@@ -291,7 +291,7 @@ export function ProductCatalog() {
                 <input
                   type="text"
                   inputMode="decimal"
-                  placeholder="Наприклад: 12.5"
+                  placeholder="Наприклад: 12,5 або 12.5"
                   value={area}
                   onChange={(event) => setArea(event.target.value)}
                   required

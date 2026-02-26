@@ -54,7 +54,7 @@ export default function Home() {
       </header>
 
       <main>
-        <section className="section-grid">
+        <section className="section-grid section-grid-contact">
           <article className="card service-card">
             <h2>Що ми робимо</h2>
             <ul>
@@ -74,41 +74,43 @@ export default function Home() {
                 вул. Торгова 57/а, т. <a href="tel:+380972542080">097-254-20-80</a>
               </li>
             </ul>
-            <div className="socials">
-              <a
-                className="btn btn-secondary"
-                href="https://www.facebook.com/oknaservis"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <FacebookIcon />
-                Facebook
-              </a>
-              <a
-                className="btn btn-secondary"
-                href="https://www.instagram.com/okna_servis_kiliya"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <InstagramIcon />
-                Instagram
-              </a>
-            </div>
-            <div className="contact-qr">
-              <p>QR-код сайту</p>
-              <a
-                href="https://vikna-service.run.place"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Відкрити сайт Вікна-Сервіс"
-              >
-                <Image
-                  src="/qr-site.png"
-                  alt="QR-код для переходу на сайт Вікна-Сервіс"
-                  width={132}
-                  height={132}
-                />
-              </a>
+            <div className="contact-tools">
+              <div className="socials">
+                <a
+                  className="btn btn-secondary"
+                  href="https://www.facebook.com/oknaservis"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <FacebookIcon />
+                  Facebook
+                </a>
+                <a
+                  className="btn btn-secondary"
+                  href="https://www.instagram.com/okna_servis_kiliya"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <InstagramIcon />
+                  Instagram
+                </a>
+              </div>
+              <div className="contact-qr">
+                <p>QR-код сайту</p>
+                <a
+                  href="https://vikna-service-prod.web.app"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Відкрити сайт Вікна-Сервіс"
+                >
+                  <Image
+                    src="/qr-site.png"
+                    alt="QR-код для переходу на сайт Вікна-Сервіс"
+                    width={112}
+                    height={112}
+                  />
+                </a>
+              </div>
             </div>
           </article>
         </section>
