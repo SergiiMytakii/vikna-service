@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import {FormEvent, useMemo, useState} from "react";
+import {getFunctionsBaseUrl} from "@/lib/functions-base-url";
 
 type PaymentMethod = "full" | "paypart" | "moment_part";
 
@@ -22,8 +23,6 @@ interface Product {
   unitPrice: number;
 }
 
-const FUNCTIONS_BASE_URL =
-  process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_BASE_URL || "";
 const INSTALLMENT_COUNTS = Array.from({length: 24}, (_, index) => index + 2);
 
 const products: Product[] = [
@@ -51,6 +50,7 @@ const products: Product[] = [
 ];
 
 export function ProductCatalog() {
+  const functionsBaseUrl = getFunctionsBaseUrl();
   const [activeProduct, setActiveProduct] = useState<Product | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("full");
   const [area, setArea] = useState("1");
@@ -119,7 +119,7 @@ export function ProductCatalog() {
       return;
     }
 
-    if (!FUNCTIONS_BASE_URL) {
+    if (!functionsBaseUrl) {
       setError(
         "Не задано адресу Firebase Functions. Додайте NEXT_PUBLIC_FIREBASE_FUNCTIONS_BASE_URL."
       );
@@ -130,7 +130,7 @@ export function ProductCatalog() {
 
     try {
       const response = await fetch(
-        `${FUNCTIONS_BASE_URL.replace(/\/+$/, "")}/createCheckoutPayload`,
+        `${functionsBaseUrl}/createCheckoutPayload`,
         {
           method: "POST",
           headers: {"Content-Type": "application/json"},

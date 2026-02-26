@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {useSearchParams} from "next/navigation";
 import {useEffect, useMemo, useState} from "react";
+import {getFunctionsBaseUrl} from "@/lib/functions-base-url";
 
 const SUCCESS_STATES = new Set([
   "success",
@@ -46,10 +47,8 @@ interface PaymentStatusResponse {
   errorCode?: string;
 }
 
-const FUNCTIONS_BASE_URL =
-  process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_BASE_URL || "";
-
 export function ResultContent() {
+  const functionsBaseUrl = getFunctionsBaseUrl();
   const searchParams = useSearchParams();
   const orderId = searchParams.get("order_id") || "";
   const queryStatus = (searchParams.get("status") || "").toLowerCase();
@@ -74,7 +73,7 @@ export function ResultContent() {
   }, [status]);
 
   useEffect(() => {
-    if (!orderId || !FUNCTIONS_BASE_URL) {
+    if (!orderId || !functionsBaseUrl) {
       setIsLoading(false);
       return;
     }
@@ -85,7 +84,7 @@ export function ResultContent() {
     const fetchStatus = async () => {
       try {
         const response = await fetch(
-          `${FUNCTIONS_BASE_URL.replace(/\/+$/, "")}/getPaymentStatus`,
+          `${functionsBaseUrl}/getPaymentStatus`,
           {
             method: "POST",
             headers: {"Content-Type": "application/json"},
@@ -146,7 +145,7 @@ export function ResultContent() {
         clearTimeout(timeoutId);
       }
     };
-  }, [orderId, queryStatus]);
+  }, [functionsBaseUrl, orderId, queryStatus]);
 
   return (
     <article className={`card result-card ${statusKind}`}>
