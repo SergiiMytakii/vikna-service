@@ -7,7 +7,23 @@
       "**/.*",
       "**/node_modules/**"
     ],
-    "cleanUrls": true
+    "cleanUrls": true,
+    "rewrites": [
+      {
+        "source": "/api/createCheckoutPayload",
+        "function": {
+          "functionId": "createCheckoutPayload",
+          "region": "europe-west1"
+        }
+      },
+      {
+        "source": "/api/getPaymentStatus",
+        "function": {
+          "functionId": "getPaymentStatus",
+          "region": "europe-west1"
+        }
+      }
+    ]
   },
   "functions": [
     {

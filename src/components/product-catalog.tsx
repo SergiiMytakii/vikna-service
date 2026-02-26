@@ -24,6 +24,33 @@ interface Product {
 }
 
 const INSTALLMENT_COUNTS = Array.from({length: 24}, (_, index) => index + 2);
+const SELLER_COVERAGE_RATE = 5;
+const SERVICE_RATE_BY_INSTALLMENTS: Record<number, number> = {
+  2: 2.3,
+  3: 2.5,
+  4: 3.6,
+  5: 5.3,
+  6: 6.5,
+  7: 7.7,
+  8: 8.8,
+  9: 9.9,
+  10: 11.2,
+  11: 12.5,
+  12: 13.7,
+  13: 14.8,
+  14: 16,
+  15: 17,
+  16: 18.1,
+  17: 19.1,
+  18: 20.1,
+  19: 21.1,
+  20: 22.3,
+  21: 23.2,
+  22: 24.3,
+  23: 25.3,
+  24: 26.3,
+  25: 27.3,
+};
 
 const products: Product[] = [
   {
@@ -58,7 +85,7 @@ export function ProductCatalog() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const total = useMemo(() => {
+  const baseTotal = useMemo(() => {
     if (!activeProduct) {
       return 0;
     }
@@ -71,6 +98,33 @@ export function ProductCatalog() {
     return Math.round(parsedArea * activeProduct.unitPrice * 100) / 100;
   }, [activeProduct, area]);
   const isInstallment = paymentMethod === "paypart" || paymentMethod === "moment_part";
+  const serviceRate = useMemo(() => {
+    if (!isInstallment) {
+      return 0;
+    }
+    const count = Number(installmentCount);
+    return SERVICE_RATE_BY_INSTALLMENTS[count] ?? 0;
+  }, [installmentCount, isInstallment]);
+  const clientSurchargeRate = useMemo(() => {
+    if (!isInstallment) {
+      return 0;
+    }
+
+    const count = Number(installmentCount);
+    if (count <= 4) {
+      return 0;
+    }
+    return Math.max(0, serviceRate - SELLER_COVERAGE_RATE);
+  }, [installmentCount, isInstallment, serviceRate]);
+  const total = useMemo(() => {
+    if (!isInstallment) {
+      return baseTotal;
+    }
+    return Math.round((baseTotal * (100 + clientSurchargeRate)) / 100 * 100) / 100;
+  }, [baseTotal, clientSurchargeRate, isInstallment]);
+  const clientSurchargeAmount = useMemo(() => {
+    return Math.max(0, Math.round((total - baseTotal) * 100) / 100);
+  }, [baseTotal, total]);
   const monthlyEstimate = useMemo(() => {
     const count = Number(installmentCount);
     if (!isInstallment || !Number.isFinite(count) || count <= 0) {
@@ -119,6 +173,16 @@ export function ProductCatalog() {
       return;
     }
 
+    const parsedInstallmentCount = Number(installmentCount);
+    if (
+      isInstallment &&
+      (!Number.isInteger(parsedInstallmentCount) ||
+        !(parsedInstallmentCount in SERVICE_RATE_BY_INSTALLMENTS))
+    ) {
+      setError("Оберіть кількість платежів у діапазоні від 2 до 25.");
+      return;
+    }
+
     if (!functionsBaseUrl) {
       setError(
         "Не задано адресу Firebase Functions. Додайте NEXT_PUBLIC_FIREBASE_FUNCTIONS_BASE_URL."
@@ -139,6 +203,7 @@ export function ProductCatalog() {
             quantity: parsedArea,
             unitPrice: activeProduct.unitPrice,
             paymentMethod,
+            installmentCount: isInstallment ? parsedInstallmentCount : undefined,
           }),
         }
       );
@@ -274,10 +339,25 @@ export function ProductCatalog() {
                     <span>Орієнтовний щомісячний платіж:</span>
                     <strong>{monthlyEstimate.toFixed(2)} грн/міс</strong>
                   </div>
+                  <div className="installment-line">
+                    <span>Комісія сервісу ({Number(installmentCount)} пл.):</span>
+                    <strong>{serviceRate.toFixed(1)}%</strong>
+                  </div>
+                  <div className="installment-line">
+                    <span>За рахунок продавця:</span>
+                    <strong>{Math.min(serviceRate, SELLER_COVERAGE_RATE).toFixed(1)}%</strong>
+                  </div>
+                  <div className="installment-line">
+                    <span>Удорожчання для клієнта:</span>
+                    <strong>
+                      {clientSurchargeRate.toFixed(1)}%
+                      {clientSurchargeAmount > 0 ? ` (+${clientSurchargeAmount.toFixed(2)} грн)` : ""}
+                    </strong>
+                  </div>
                   <p className="installment-hint">
+                    До 4 платежів включно сума для клієнта без удорожчання.
                     Остаточну кількість платежів, перший внесок і графік
-                    клієнт обирає на сторінці LiqPay. Зазвичай доступно від 2 до
-                    25 платежів залежно від ліміту клієнта та налаштувань магазину.
+                    клієнт обирає на сторінці LiqPay.
                   </p>
                 </div>
               ) : null}
