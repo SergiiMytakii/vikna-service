@@ -157,6 +157,7 @@ export function ProductCatalog() {
         {products.map((product) => (
           <article className="card product-card" key={product.name}>
             <Image
+              className="product-main-image"
               src={product.image}
               alt={product.name}
               width={1200}
@@ -181,10 +182,11 @@ export function ProductCatalog() {
                   onClick={() => openDialog(product, "paypart")}
                 >
                   <Image
+                    className="paypart-icon"
                     src="/icons/paypart.svg"
                     alt="Оплата частинами"
-                    width={18}
-                    height={18}
+                    width={14}
+                    height={14}
                   />
                   Оплата частинами
                 </button>

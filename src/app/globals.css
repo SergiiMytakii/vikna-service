@@ -170,7 +170,7 @@ h2 {
   gap: 0.72rem;
 }
 
-.product-card img {
+.product-main-image {
   width: 100%;
   height: 180px;
   object-fit: cover;
@@ -210,6 +210,19 @@ h2 {
   padding: 0.68rem 0.75rem;
   border-radius: 14px;
   font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.paypart-icon {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+  flex: none;
 }
 
 .modal-overlay {
