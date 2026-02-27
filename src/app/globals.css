@@ -121,6 +121,24 @@ h2 {
   flex-wrap: wrap;
 }
 
+.contact-layout {
+  margin-top: 0.4rem;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.contact-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.contact-info ul {
+  margin: 0;
+}
+
 .contact-tools .socials {
   margin-top: 0;
 }
@@ -144,6 +162,16 @@ h2 {
   border-radius: 14px;
   border: 1px solid #e5e5e7;
   background: #fff;
+}
+
+@media (max-width: 720px) {
+  .contact-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .contact-qr {
+    justify-items: start;
+  }
 }
 
 .btn {
@@ -238,25 +266,49 @@ h2 {
 
 .product-methods-row {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 0.55rem;
+}
+
+.product-methods-row-single {
+  grid-template-columns: 1fr;
 }
 
 .product-method-btn {
   width: 100%;
-  min-height: 44px;
-  padding: 0.68rem 0.75rem;
+  min-height: 62px;
+  padding: 0.62rem 0.7rem;
   border-radius: 14px;
-  font-size: 0.9rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 0.2rem;
   line-height: 1.2;
   text-align: center;
 }
 
+.product-method-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.34rem;
+  font-size: 0.94rem;
+  font-weight: 800;
+}
+
+.product-method-copy {
+  font-size: 0.74rem;
+  color: #606060;
+  font-weight: 600;
+}
+
 .paypart-icon {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+  flex: none;
+}
+
+.moment-icon {
   width: 14px;
   height: 14px;
   object-fit: contain;

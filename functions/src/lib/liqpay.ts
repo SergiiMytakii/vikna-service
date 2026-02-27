@@ -23,8 +23,6 @@ export interface NormalizedCheckoutInput {
   amount: number;
   paymentMethod: PaymentMethod;
   installmentCount?: number;
-  serviceRate?: number;
-  clientSurchargeRate?: number;
 }
 
 export interface SignatureVerificationResult {
@@ -33,33 +31,6 @@ export interface SignatureVerificationResult {
 }
 
 export const checkoutActionUrl = LIQPAY_CHECKOUT_ACTION_URL;
-const SELLER_COVERAGE_RATE = 5;
-const SERVICE_RATE_BY_INSTALLMENTS: Record<number, number> = {
-  2: 2.3,
-  3: 2.5,
-  4: 3.6,
-  5: 5.3,
-  6: 6.5,
-  7: 7.7,
-  8: 8.8,
-  9: 9.9,
-  10: 11.2,
-  11: 12.5,
-  12: 13.7,
-  13: 14.8,
-  14: 16,
-  15: 17,
-  16: 18.1,
-  17: 19.1,
-  18: 20.1,
-  19: 21.1,
-  20: 22.3,
-  21: 23.2,
-  22: 24.3,
-  23: 25.3,
-  24: 26.3,
-  25: 27.3,
-};
 
 export function normalizeCheckoutInput(
   input: Partial<CheckoutInput>
@@ -88,23 +59,18 @@ export function normalizeCheckoutInput(
   const baseAmountCents = Math.round(
     (unitPriceCents * quantityHundredths) / 100
   );
-  const installmentPricing = getInstallmentPricing(
+  const installmentCount = normalizeInstallmentCount(
     paymentMethod,
     input.installmentCount
-  );
-  const amountCents = Math.round(
-    (baseAmountCents * (100 + installmentPricing.clientSurchargeRate)) / 100
   );
 
   return {
     productType,
     quantity: quantityHundredths / 100,
     unitPrice: unitPriceCents / 100,
-    amount: amountCents / 100,
+    amount: baseAmountCents / 100,
     paymentMethod,
-    installmentCount: installmentPricing.installmentCount,
-    serviceRate: installmentPricing.serviceRate,
-    clientSurchargeRate: installmentPricing.clientSurchargeRate,
+    installmentCount,
   };
 }
 
@@ -236,44 +202,28 @@ function buildDescriptionSuffix(normalized: NormalizedCheckoutInput): string {
   return `${areaText}, ${normalized.installmentCount} платежів`;
 }
 
-function getInstallmentPricing(
+function normalizeInstallmentCount(
   paymentMethod: PaymentMethod,
   installmentCountRaw: unknown
-): {
-  installmentCount?: number;
-  serviceRate?: number;
-  clientSurchargeRate: number;
-} {
-  if (paymentMethod !== "paypart" && paymentMethod !== "moment_part") {
-    return {clientSurchargeRate: 0};
+): number | undefined {
+  if (paymentMethod !== "moment_part") {
+    return undefined;
   }
 
-  const installmentCount =
-    installmentCountRaw === undefined || installmentCountRaw === null
-      ? 4
-      : Number(installmentCountRaw);
+  if (installmentCountRaw === undefined || installmentCountRaw === null) {
+    return undefined;
+  }
+
+  const installmentCount = Number(installmentCountRaw);
   if (!Number.isInteger(installmentCount)) {
-    throw new Error("Кількість платежів має бути цілим числом від 2 до 25");
+    throw new Error("Кількість платежів має бути цілим числом від 2 до 24");
   }
 
-  const serviceRate = SERVICE_RATE_BY_INSTALLMENTS[installmentCount];
-  if (serviceRate === undefined) {
-    throw new Error("Кількість платежів має бути в діапазоні від 2 до 25");
+  if (installmentCount < 2 || installmentCount > 24) {
+    throw new Error("Кількість платежів має бути в діапазоні від 2 до 24");
   }
 
-  if (installmentCount <= 4) {
-    return {
-      installmentCount,
-      serviceRate,
-      clientSurchargeRate: 0,
-    };
-  }
-
-  return {
-    installmentCount,
-    serviceRate,
-    clientSurchargeRate: Math.max(0, serviceRate - SELLER_COVERAGE_RATE),
-  };
+  return installmentCount;
 }
 
 function normalizePaymentMethod(value: unknown): PaymentMethod {

@@ -1,19 +1,26 @@
 "use client";
 
 import Image from "next/image";
-import {FormEvent, useMemo, useState} from "react";
+import {FormEvent, useEffect, useMemo, useState} from "react";
 import {getFunctionsBaseUrl} from "@/lib/functions-base-url";
 
-type PaymentMethod = "full" | "paypart";
+type PaymentMethod = "full" | "paypart" | "moment_part";
 
 interface ApiSuccess {
-  actionUrl: string;
-  data: string;
-  signature: string;
+  actionUrl?: string;
+  data?: string;
+  signature?: string;
+  redirectUrl?: string;
+  provider?: string;
 }
 
 interface ApiError {
   error: string;
+}
+
+interface InstallmentSettingsResponse {
+  creditProvider?: "payparts" | "liqpay";
+  showMomentPart?: boolean;
 }
 
 interface Product {
@@ -22,35 +29,6 @@ interface Product {
   description: string;
   unitPrice: number;
 }
-
-const INSTALLMENT_COUNTS = Array.from({length: 24}, (_, index) => index + 2);
-const SELLER_COVERAGE_RATE = 5;
-const SERVICE_RATE_BY_INSTALLMENTS: Record<number, number> = {
-  2: 2.3,
-  3: 2.5,
-  4: 3.6,
-  5: 5.3,
-  6: 6.5,
-  7: 7.7,
-  8: 8.8,
-  9: 9.9,
-  10: 11.2,
-  11: 12.5,
-  12: 13.7,
-  13: 14.8,
-  14: 16,
-  15: 17,
-  16: 18.1,
-  17: 19.1,
-  18: 20.1,
-  19: 21.1,
-  20: 22.3,
-  21: 23.2,
-  22: 24.3,
-  23: 25.3,
-  24: 26.3,
-  25: 27.3,
-};
 
 const products: Product[] = [
   {
@@ -76,12 +54,23 @@ const products: Product[] = [
   },
 ];
 
+function parseDecimal(input: string): number {
+  return Number(input.trim().replace(",", "."));
+}
+
+function formatNumber(value: number): string {
+  return (Math.round(value * 100) / 100).toString();
+}
+
 export function ProductCatalog() {
   const functionsBaseUrl = getFunctionsBaseUrl();
   const [activeProduct, setActiveProduct] = useState<Product | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("full");
-  const [area, setArea] = useState("1");
+  const [showMomentPart, setShowMomentPart] = useState(false);
   const [installmentCount, setInstallmentCount] = useState("4");
+  const [area, setArea] = useState("1");
+  const [amount, setAmount] = useState("0");
+  const [unitPriceInput, setUnitPriceInput] = useState("0");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -90,55 +79,136 @@ export function ProductCatalog() {
       return 0;
     }
 
-    const parsedArea = Number(area.trim().replace(",", "."));
-    if (!Number.isFinite(parsedArea) || parsedArea <= 0) {
-      return 0;
+    const price = parseDecimal(unitPriceInput);
+    const parsedArea = parseDecimal(area);
+    const parsedAmount = parseDecimal(amount);
+
+    if (Number.isFinite(parsedArea) && parsedArea > 0 && Number.isFinite(price) && price > 0) {
+      return Math.round(parsedArea * price * 100) / 100;
     }
 
-    return Math.round(parsedArea * activeProduct.unitPrice * 100) / 100;
-  }, [activeProduct, area]);
-  const isInstallment = paymentMethod === "paypart";
-  const serviceRate = useMemo(() => {
-    if (!isInstallment) {
-      return 0;
-    }
-    const count = Number(installmentCount);
-    return SERVICE_RATE_BY_INSTALLMENTS[count] ?? 0;
-  }, [installmentCount, isInstallment]);
-  const clientSurchargeRate = useMemo(() => {
-    if (!isInstallment) {
-      return 0;
+    if (Number.isFinite(parsedAmount) && parsedAmount > 0 && Number.isFinite(price) && price > 0) {
+      return Math.round(parsedAmount * 100) / 100;
     }
 
-    const count = Number(installmentCount);
-    if (count <= 4) {
-      return 0;
+    return 0;
+  }, [activeProduct, amount, area, unitPriceInput]);
+  const total = baseTotal;
+  const installments = Number(installmentCount);
+  const installmentCalculator = useMemo(() => {
+    if (paymentMethod === "full") {
+      return null;
     }
-    return Math.max(0, serviceRate - SELLER_COVERAGE_RATE);
-  }, [installmentCount, isInstallment, serviceRate]);
-  const total = useMemo(() => {
-    if (!isInstallment) {
-      return baseTotal;
+
+    if (!Number.isFinite(total) || total <= 0) {
+      return null;
     }
-    return Math.round((baseTotal * (100 + clientSurchargeRate)) / 100 * 100) / 100;
-  }, [baseTotal, clientSurchargeRate, isInstallment]);
+
+    if (!Number.isInteger(installments) || installments <= 0) {
+      return null;
+    }
+
+    if (paymentMethod === "paypart") {
+      const monthly = Math.round((total / installments) * 100) / 100;
+      return {
+        totalForClient: total,
+        monthly,
+        rateLabel: "0%",
+      };
+    }
+
+    const totalForClient = Math.round(total * (1 + 0.019 * installments) * 100) / 100;
+    const monthly = Math.round((totalForClient / installments) * 100) / 100;
+    return {
+      totalForClient,
+      monthly,
+      rateLabel: "1.9% / міс",
+    };
+  }, [installments, paymentMethod, total]);
+
+  useEffect(() => {
+    const onPageShow = () => {
+      setIsLoading(false);
+    };
+    const onVisible = () => {
+      if (!document.hidden) {
+        setIsLoading(false);
+      }
+    };
+
+    window.addEventListener("pageshow", onPageShow);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("pageshow", onPageShow);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!functionsBaseUrl) {
+      setShowMomentPart(false);
+      return;
+    }
+
+    let isCancelled = false;
+
+    const loadInstallmentSettings = async () => {
+      try {
+        const response = await fetch(
+          `${functionsBaseUrl}/getInstallmentSettings`,
+          {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: "{}",
+          }
+        );
+
+        const payload =
+          (await response.json()) as InstallmentSettingsResponse | ApiError;
+
+        if (!response.ok || isCancelled) {
+          return;
+        }
+
+        const settings = payload as InstallmentSettingsResponse;
+        setShowMomentPart(Boolean(settings.showMomentPart));
+      } catch {
+        if (isCancelled) {
+          return;
+        }
+        setShowMomentPart(false);
+      }
+    };
+
+    loadInstallmentSettings();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [functionsBaseUrl]);
+
+  useEffect(() => {
+    if (!showMomentPart && paymentMethod === "moment_part") {
+      setPaymentMethod("paypart");
+      setInstallmentCount("4");
+    }
+  }, [paymentMethod, showMomentPart]);
 
   function openDialog(product: Product, method: PaymentMethod) {
     setActiveProduct(product);
     setPaymentMethod(method);
+    setInstallmentCount(defaultInstallmentCount(method).toString());
     setArea("1");
-    setInstallmentCount("4");
+    setUnitPriceInput(product.unitPrice.toString());
+    setAmount(formatNumber(product.unitPrice));
     setError("");
     setIsLoading(false);
   }
 
   function closeDialog() {
-    if (isLoading) {
-      return;
-    }
-
     setActiveProduct(null);
     setError("");
+    setIsLoading(false);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -150,27 +220,62 @@ export function ProductCatalog() {
 
     setError("");
 
-    const areaValue = area.trim().replace(",", ".");
-    const parsedArea = Number(areaValue);
+    const areaValue = area.trim();
+    const amountValue = amount.trim();
+    const priceValue = unitPriceInput.trim();
 
-    if (!/^\d+(?:[.,]\d{1,2})?$/.test(area.trim())) {
+    if (priceValue && !/^\d+(?:[.,]\d{1,2})?$/.test(priceValue)) {
+      setError("Ціна може мати не більше 2 знаків після коми.");
+      return;
+    }
+
+    const parsedUnitPrice = parseDecimal(priceValue);
+
+    if (!Number.isFinite(parsedUnitPrice) || parsedUnitPrice <= 0) {
+      setError("Вкажіть коректну ціну за м² більше 0.");
+      return;
+    }
+
+    if (areaValue && !/^\d+(?:[.,]\d{1,2})?$/.test(areaValue)) {
       setError("Площа може мати не більше 2 знаків після коми.");
       return;
     }
 
-    if (!Number.isFinite(parsedArea) || parsedArea <= 0) {
-      setError("Вкажіть коректну площу більше 0 м².");
+    if (amountValue && !/^\d+(?:[.,]\d{1,2})?$/.test(amountValue)) {
+      setError("Сума може мати не більше 2 знаків після коми.");
       return;
     }
 
-    const parsedInstallmentCount = Number(installmentCount);
-    if (
-      isInstallment &&
-      (!Number.isInteger(parsedInstallmentCount) ||
-        !(parsedInstallmentCount in SERVICE_RATE_BY_INSTALLMENTS))
-    ) {
-      setError("Оберіть кількість платежів у діапазоні від 2 до 25.");
+    const parsedArea = parseDecimal(areaValue);
+    const parsedAmount = parseDecimal(amountValue);
+    let quantity: number | null = null;
+
+    if (Number.isFinite(parsedArea) && parsedArea > 0) {
+      quantity = parsedArea;
+    } else if (Number.isFinite(parsedAmount) && parsedAmount > 0) {
+      const derivedArea = parsedAmount / parsedUnitPrice;
+      if (derivedArea > 0) {
+        quantity = derivedArea;
+      }
+    }
+
+    if (!quantity) {
+      setError("Вкажіть площу або суму більше 0.");
       return;
+    }
+
+    if (paymentMethod !== "full") {
+      const range = installmentRange(paymentMethod);
+      if (
+        !Number.isInteger(installments) ||
+        installments < range.min ||
+        installments > range.max
+      ) {
+        setError(
+          `Оберіть кількість платежів від ${range.min} до ${range.max}.`
+        );
+        return;
+      }
     }
 
     if (!functionsBaseUrl) {
@@ -183,18 +288,29 @@ export function ProductCatalog() {
     setIsLoading(true);
 
     try {
+      const requestBody: {
+        productType: string;
+        quantity: number;
+        unitPrice: number;
+        paymentMethod: PaymentMethod;
+        installmentCount?: number;
+      } = {
+        productType: activeProduct.name,
+        quantity,
+        unitPrice: parsedUnitPrice,
+        paymentMethod,
+      };
+
+      if (paymentMethod !== "full") {
+        requestBody.installmentCount = installments;
+      }
+
       const response = await fetch(
         `${functionsBaseUrl}/createCheckoutPayload`,
         {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({
-            productType: activeProduct.name,
-            quantity: parsedArea,
-            unitPrice: activeProduct.unitPrice,
-            paymentMethod,
-            installmentCount: isInstallment ? parsedInstallmentCount : undefined,
-          }),
+          body: JSON.stringify(requestBody),
         }
       );
 
@@ -206,7 +322,26 @@ export function ProductCatalog() {
         );
       }
 
-      submitToLiqPay(payload as ApiSuccess);
+      const successPayload = payload as ApiSuccess;
+      if (successPayload.redirectUrl) {
+        window.location.assign(successPayload.redirectUrl);
+        return;
+      }
+
+      if (
+        successPayload.actionUrl &&
+        successPayload.data &&
+        successPayload.signature
+      ) {
+        submitToLiqPay({
+          actionUrl: successPayload.actionUrl,
+          data: successPayload.data,
+          signature: successPayload.signature,
+        });
+        return;
+      }
+
+      throw new Error("Сервер повернув неповні дані для оплати");
     } catch (submitError) {
       const message =
         submitError instanceof Error
@@ -241,21 +376,53 @@ export function ProductCatalog() {
               >
                 Купити
               </button>
-              <div className="product-methods-row">
+              <div
+                className={
+                  showMomentPart ?
+                    "product-methods-row" :
+                    "product-methods-row product-methods-row-single"
+                }
+              >
                 <button
                   className="btn btn-secondary product-method-btn"
                   type="button"
                   onClick={() => openDialog(product, "paypart")}
                 >
-                  <Image
-                    className="paypart-icon"
-                    src="/icons/paypart.svg"
-                    alt="Оплата частинами"
-                    width={14}
-                    height={14}
-                  />
-                  Оплата частинами
+                  <span className="product-method-main">
+                    <Image
+                      className="paypart-icon"
+                      src="/icons/paypart.svg"
+                      alt="Оплата частинами"
+                      width={14}
+                      height={14}
+                    />
+                    Оплата частинами
+                  </span>
+                  <span className="product-method-copy">
+                    0% переплата,<br />до 5 платежів
+                  </span>
                 </button>
+                {showMomentPart ? (
+                  <button
+                    className="btn btn-secondary product-method-btn"
+                    type="button"
+                    onClick={() => openDialog(product, "moment_part")}
+                  >
+                    <span className="product-method-main">
+                      <Image
+                        className="moment-icon"
+                        src="/icons/moment-part.svg"
+                        alt="Миттєва розстрочка"
+                        width={14}
+                        height={14}
+                      />
+                      Миттєва розстрочка
+                    </span>
+                    <span className="product-method-copy">
+                      Ставка 1,9% щомісяця,<br />від 5 до 24 платежів
+                    </span>
+                  </button>
+                ) : null}
               </div>
             </div>
           </article>
@@ -282,10 +449,35 @@ export function ProductCatalog() {
               Метод: <strong>{paymentMethodLabel(paymentMethod)}</strong>
             </p>
             <p className="payment-modal-price">
-              Фіксована ціна: {activeProduct.unitPrice} грн/м²
+              Ціна за м² можна змінити за потреби
             </p>
 
             <form className="payment-modal-form" onSubmit={handleSubmit}>
+              <label>
+                Ціна, грн за м²
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="Наприклад: 1200"
+                  value={unitPriceInput}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setUnitPriceInput(value);
+
+                    const newPrice = parseDecimal(value);
+                    const parsedArea = parseDecimal(area);
+                    const parsedAmount = parseDecimal(amount);
+
+                    if (Number.isFinite(newPrice) && newPrice > 0) {
+                      if (Number.isFinite(parsedArea) && parsedArea > 0) {
+                        setAmount(formatNumber(parsedArea * newPrice));
+                      } else if (Number.isFinite(parsedAmount) && parsedAmount > 0) {
+                        setArea(formatNumber(parsedAmount / newPrice));
+                      }
+                    }
+                  }}
+                />
+              </label>
               <label>
                 Площа, м²
                 <input
@@ -293,8 +485,46 @@ export function ProductCatalog() {
                   inputMode="decimal"
                   placeholder="Наприклад: 12,5 або 12.5"
                   value={area}
-                  onChange={(event) => setArea(event.target.value)}
-                  required
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setArea(value);
+
+                    const parsedArea = parseDecimal(value);
+                    const price = parseDecimal(unitPriceInput);
+                    if (
+                      Number.isFinite(parsedArea) &&
+                      parsedArea > 0 &&
+                      Number.isFinite(price) &&
+                      price > 0
+                    ) {
+                      setAmount(formatNumber(parsedArea * price));
+                    }
+                  }}
+                />
+              </label>
+
+              <label>
+                Сума, грн (можна ввести вручну)
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="Наприклад: 15000"
+                  value={amount}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setAmount(value);
+
+                    const parsedAmount = parseDecimal(value);
+                    const price = parseDecimal(unitPriceInput);
+                    if (
+                      Number.isFinite(parsedAmount) &&
+                      parsedAmount > 0 &&
+                      Number.isFinite(price) &&
+                      price > 0
+                    ) {
+                      setArea(formatNumber(parsedAmount / price));
+                    }
+                  }}
                 />
               </label>
 
@@ -303,24 +533,49 @@ export function ProductCatalog() {
                 <strong>{total.toFixed(2)} грн</strong>
               </div>
 
-              {isInstallment ? (
+              {paymentMethod !== "full" ? (
+                <label>
+                  Кількість платежів
+                  <select
+                    value={installmentCount}
+                    onChange={(event) => setInstallmentCount(event.target.value)}
+                  >
+                    {buildInstallmentOptions(paymentMethod).map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+
+              {paymentMethod === "paypart" ? (
+                <p className="installment-hint">
+                  0% переплата. Оберіть від 2 до 5 платежів.
+                </p>
+              ) : null}
+
+              {paymentMethod === "moment_part" ? (
+                <p className="installment-hint">
+                  Оберіть від 5 до 24 платежів. Підтвердження договору клієнт
+                  проходить на сторінці банку.
+                </p>
+              ) : null}
+
+              {installmentCalculator ? (
                 <div className="installment-box">
-                  <label>
-                    Кількість платежів
-                    <select
-                      value={installmentCount}
-                      onChange={(event) => setInstallmentCount(event.target.value)}
-                    >
-                      {INSTALLMENT_COUNTS.map((count) => (
-                        <option key={count} value={count}>
-                          {count} платежів
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <p className="installment-hint">
-                    Перший внесок і фінальний графік платежів клієнт підтверджує на сторінці LiqPay.
-                  </p>
+                  <div className="total-line">
+                    <span>Вартість послуги для покупця</span>
+                    <strong>{installmentCalculator.totalForClient.toFixed(2)} грн</strong>
+                  </div>
+                  <div className="total-line">
+                    <span>Процентна ставка</span>
+                    <strong>{installmentCalculator.rateLabel}</strong>
+                  </div>
+                  <div className="total-line">
+                    <span>Орієнтовний платіж / міс</span>
+                    <strong>{installmentCalculator.monthly.toFixed(2)} грн</strong>
+                  </div>
                 </div>
               ) : null}
 
@@ -341,13 +596,47 @@ function paymentMethodLabel(method: PaymentMethod): string {
   switch (method) {
   case "paypart":
     return "Оплата частинами";
+  case "moment_part":
+    return "Миттєва розстрочка";
   case "full":
   default:
     return "Повна оплата";
   }
 }
 
-function submitToLiqPay(payload: ApiSuccess) {
+function defaultInstallmentCount(method: PaymentMethod): number {
+  if (method === "paypart") {
+    return 4;
+  }
+  if (method === "moment_part") {
+    return 5;
+  }
+  return 0;
+}
+
+function installmentRange(method: PaymentMethod): {min: number; max: number} {
+  if (method === "paypart") {
+    return {min: 2, max: 5};
+  }
+  return {min: 5, max: 24};
+}
+
+function buildInstallmentOptions(method: PaymentMethod): number[] {
+  const range = installmentRange(method);
+  const options: number[] = [];
+
+  for (let value = range.min; value <= range.max; value += 1) {
+    options.push(value);
+  }
+
+  return options;
+}
+
+function submitToLiqPay(payload: {
+  actionUrl: string;
+  data: string;
+  signature: string;
+}) {
   const form = document.createElement("form");
   form.method = "POST";
   form.action = payload.actionUrl;

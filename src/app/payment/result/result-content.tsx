@@ -14,8 +14,23 @@ const APPROVED_STATES = new Set([
   "wait_accept",
   "hold_wait",
 ]);
-const FAILURE_STATES = new Set(["error", "failure", "reversed", "unsubscribed"]);
+const FAILURE_STATES = new Set([
+  "error",
+  "failure",
+  "reversed",
+  "unsubscribed",
+  "fail",
+  "canceled",
+  "cancelled",
+  "declined",
+]);
 const PENDING_STATES = new Set([
+  "created",
+  "client_wait",
+  "otp_waiting",
+  "pp_creation",
+  "wait_liqpay",
+  "locked",
   "3ds_verify",
   "captcha_verify",
   "cvv_verify",
@@ -40,6 +55,7 @@ const PENDING_STATES = new Set([
 ]);
 
 interface PaymentStatusResponse {
+  provider?: string;
   status?: string;
   amount?: number | string;
   currency?: string;
@@ -53,6 +69,8 @@ export function ResultContent() {
   const functionsBaseUrl = getFunctionsBaseUrl();
   const searchParams = useSearchParams();
   const orderId = searchParams.get("order_id") || "";
+  const provider = (searchParams.get("provider") || "").toLowerCase();
+  const methodFromQuery = (searchParams.get("method") || "").toLowerCase();
   const queryStatus = (searchParams.get("status") || "").toLowerCase();
 
   const [status, setStatus] = useState(queryStatus || "processing");
@@ -90,7 +108,7 @@ export function ResultContent() {
           {
             method: "POST",
             headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({orderId}),
+            body: JSON.stringify({orderId, provider}),
           }
         );
 
@@ -109,7 +127,9 @@ export function ResultContent() {
         const normalizedStatus = `${payload.status || queryStatus || "processing"}`
           .toLowerCase();
         setStatus(normalizedStatus);
-        setPaytype(`${payload.paytype || "-"}`);
+        setPaytype(
+          `${payload.paytype || (provider === "payparts" ? methodFromQuery || "paypart" : "-")}`
+        );
 
         if (payload.amount !== undefined && payload.amount !== null) {
           setAmount(`${payload.amount}`);
@@ -147,13 +167,13 @@ export function ResultContent() {
         clearTimeout(timeoutId);
       }
     };
-  }, [functionsBaseUrl, orderId, queryStatus]);
+  }, [functionsBaseUrl, methodFromQuery, orderId, provider, queryStatus]);
 
   return (
     <article className={`card result-card ${statusKind}`}>
       <p className="eyebrow">Статус платежу</p>
-      <h1>{titleByStatus(statusKind, isLoading)}</h1>
-      <p>{descriptionByStatus(statusKind, isLoading, status)}</p>
+      <h1>{titleByStatus(statusKind, isLoading, status)}</h1>
+      <p>{descriptionByStatus(statusKind, isLoading, status, provider)}</p>
 
       <dl>
         <div>
@@ -191,7 +211,11 @@ function isFinalState(status: string): boolean {
   );
 }
 
-function titleByStatus(statusKind: string, isLoading: boolean): string {
+function titleByStatus(
+  statusKind: string,
+  isLoading: boolean,
+  status: string
+): string {
   if (isLoading) {
     return "Перевіряємо платіж";
   }
@@ -216,9 +240,13 @@ function titleByStatus(statusKind: string, isLoading: boolean): string {
 function descriptionByStatus(
   statusKind: string,
   isLoading: boolean,
-  status: string
+  status: string,
+  provider: string
 ): string {
   if (isLoading) {
+    if (provider === "payparts") {
+      return "Очікуємо підтвердження від сервісу кредитування. Це може зайняти до 1 хвилини.";
+    }
     return "Очікуємо підтвердження від LiqPay. Це може зайняти до 1 хвилини.";
   }
 
@@ -253,6 +281,14 @@ function formatStatus(status: string): string {
 
   const labels: Record<string, string> = {
     success: "Успішно",
+    client_wait: "Очікування дій клієнта",
+    otp_waiting: "Очікування OTP-підтвердження",
+    pp_creation: "Оформлення договору",
+    created: "Створено",
+    canceled: "Скасовано",
+    cancelled: "Скасовано",
+    fail: "Неуспішно",
+    locked: "Очікує підтвердження магазином",
     wait_compensation: "Успішно, очікується зарахування",
     processing: "Обробляється",
     prepared: "Створено, очікується завершення",

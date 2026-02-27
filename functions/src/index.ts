@@ -15,6 +15,21 @@ import {
   normalizeUrl,
   verifySignature,
 } from "./lib/liqpay";
+import {
+  buildPaypartsCheckoutUrl,
+  buildPaypartsCreatePaymentRequest,
+  buildPaypartsProducts,
+  buildPaypartsStateRequest,
+  createPaypartsOrderId,
+  createPaypartsPayment,
+  getPaypartsPaymentState,
+  normalizePaypartsBaseUrl,
+  toPaypartsMerchantType,
+  verifyPaypartsCallbackSignature,
+  verifyPaypartsCreateResponseSignature,
+  verifyPaypartsStateResponseSignature,
+  type PaypartsCallbackPayload,
+} from "./lib/payparts";
 
 setGlobalOptions({maxInstances: 10, region: "europe-west1"});
 
@@ -26,13 +41,23 @@ const PROD_ORIGINS = [
   "https://vikna-service-prod.firebaseapp.com",
 ];
 const LIQPAY_API_URL = "https://www.liqpay.ua/api/request";
+const PAYPARTS_DEFAULT_BASE_URL = "https://payparts2.privatbank.ua/ipp/v2";
+const PAYPARTS_DEMO_STORE_ID = "4AAD1369CF734B64B70F";
+const PAYPARTS_DEMO_PASSWORD = "75bef16bfdce4d0e9c0ad5a19b9940df";
 const INSTALLMENT_PAYTYPES = new Set(["paypart", "moment_part"]);
 const LIQPAY_PUBLIC_KEY_SECRET = defineSecret("LIQPAY_PUBLIC_KEY");
 const LIQPAY_PRIVATE_KEY_SECRET = defineSecret("LIQPAY_PRIVATE_KEY");
+const PAYPARTS_STORE_ID_SECRET = defineSecret("PAYPARTS_STORE_ID");
+const PAYPARTS_PASSWORD_SECRET = defineSecret("PAYPARTS_PASSWORD");
 
 export const createCheckoutPayload = onRequest({
-  secrets: [LIQPAY_PUBLIC_KEY_SECRET, LIQPAY_PRIVATE_KEY_SECRET],
-}, (request, response) => {
+  secrets: [
+    LIQPAY_PUBLIC_KEY_SECRET,
+    LIQPAY_PRIVATE_KEY_SECRET,
+    PAYPARTS_STORE_ID_SECRET,
+    PAYPARTS_PASSWORD_SECRET,
+  ],
+}, async (request, response) => {
   applyCors(request.headers.origin, response);
 
   if (request.method === "OPTIONS") {
@@ -50,33 +75,141 @@ export const createCheckoutPayload = onRequest({
     return;
   }
 
-  const publicKey = getConfigValue(
-    LIQPAY_PUBLIC_KEY_SECRET,
-    "LIQPAY_PUBLIC_KEY"
-  );
-  const privateKey = getConfigValue(
-    LIQPAY_PRIVATE_KEY_SECRET,
-    "LIQPAY_PRIVATE_KEY"
-  );
-
-  if (!publicKey || !privateKey) {
-    logger.error("liqpay_keys_missing", {
-      hasPublicKey: Boolean(publicKey),
-      hasPrivateKey: Boolean(privateKey),
-    });
-
-    response.status(500).json({
-      error: "Сервер не налаштований для проведення платежів",
-    });
-    return;
-  }
-
   try {
     const normalized = normalizeCheckoutInput(request.body ?? {});
     const siteUrl = normalizeUrl(
       process.env.SITE_URL || "https://vikna-service.run.place"
     );
     const functionsBaseUrl = normalizeUrl(resolveFunctionsBaseUrl(request));
+    const installmentMethod =
+      normalized.paymentMethod === "paypart" ||
+      normalized.paymentMethod === "moment_part"
+        ? normalized.paymentMethod
+        : null;
+
+    if (installmentMethod) {
+      const storeId = getConfigValue(
+        PAYPARTS_STORE_ID_SECRET,
+        "PAYPARTS_STORE_ID"
+      );
+      const password = getConfigValue(
+        PAYPARTS_PASSWORD_SECRET,
+        "PAYPARTS_PASSWORD"
+      );
+      const hasLivePayparts = hasLivePaypartsCredentials(storeId, password);
+      const shouldUsePayparts = hasLivePayparts;
+
+      if (shouldUsePayparts && storeId && password) {
+        if (normalized.amount < 300) {
+          response.status(400).json({
+            error: "Мінімальна сума для кредиту становить 300 грн.",
+          });
+          return;
+        }
+
+        const paypartsBaseUrl = normalizePaypartsBaseUrl(
+          process.env.PAYPARTS_BASE_URL || PAYPARTS_DEFAULT_BASE_URL
+        );
+        const paypartsSiteUrl = resolvePaypartsSiteUrl(siteUrl);
+        const paypartsCallbackBaseUrl = resolvePaypartsCallbackBaseUrl(
+          functionsBaseUrl
+        );
+        const merchantType = toPaypartsMerchantType(installmentMethod);
+        const orderId = createPaypartsOrderId(merchantType);
+        const partsCount = resolvePaypartsPartsCount(
+          installmentMethod,
+          (request.body as {installmentCount?: unknown} | undefined)
+            ?.installmentCount
+        );
+        const createRequest = buildPaypartsCreatePaymentRequest({
+          storeId,
+          password,
+          orderId,
+          amount: normalized.amount,
+          partsCount,
+          merchantType,
+          products: buildPaypartsProducts(
+            normalized.productType,
+            normalized.quantity,
+            normalized.amount
+          ),
+          responseUrl: `${paypartsCallbackBaseUrl}/paypartsCallback`,
+          redirectUrl:
+            `${paypartsSiteUrl}/payment/result` +
+            "?provider=payparts" +
+            `&method=${encodeURIComponent(installmentMethod)}` +
+            `&order_id=${encodeURIComponent(orderId)}`,
+        });
+        const createResponse = await createPaypartsPayment(
+          createRequest,
+          paypartsBaseUrl
+        );
+        const responseOrderId =
+          toStringOrEmpty(createResponse.orderId) || orderId;
+        const responseState = toUpperString(createResponse.state);
+        const responseToken = toStringOrEmpty(createResponse.token);
+        const responseMessage = toStringOrEmpty(createResponse.message);
+        const signatureValid = verifyPaypartsCreateResponseSignature(
+          createResponse,
+          password
+        );
+
+        if (!signatureValid) {
+          logger.error("payparts_create_invalid_signature", {
+            orderId: responseOrderId,
+            state: responseState,
+          });
+          response.status(502).json({
+            error: "Не вдалося підтвердити відповідь банку. Спробуйте ще раз.",
+          });
+          return;
+        }
+
+        if (responseState !== "SUCCESS" || !responseToken) {
+          response.status(400).json({
+            error:
+              responseMessage ||
+              "Банк відхилив створення кредитної заявки.",
+          });
+          return;
+        }
+
+        response.status(200).json({
+          provider: "payparts",
+          redirectUrl: buildPaypartsCheckoutUrl(responseToken, paypartsBaseUrl),
+          orderId: responseOrderId,
+          amount: normalized.amount,
+          currency: "UAH",
+        });
+        return;
+      }
+
+      logger.warn("payparts_fallback_to_liqpay", {
+        paymentMethod: installmentMethod,
+        hasStoreId: Boolean(storeId),
+        hasPassword: Boolean(password),
+        reason: explainPaypartsFallback(storeId, password),
+      });
+    }
+
+    const publicKey = getConfigValue(
+      LIQPAY_PUBLIC_KEY_SECRET,
+      "LIQPAY_PUBLIC_KEY"
+    );
+    const privateKey = getConfigValue(
+      LIQPAY_PRIVATE_KEY_SECRET,
+      "LIQPAY_PRIVATE_KEY"
+    );
+    if (!publicKey || !privateKey) {
+      logger.error("liqpay_keys_missing", {
+        hasPublicKey: Boolean(publicKey),
+        hasPrivateKey: Boolean(privateKey),
+      });
+      response.status(500).json({
+        error: "Сервер не налаштований для проведення платежів",
+      });
+      return;
+    }
 
     const payload = buildCheckoutPayload(
       normalized,
@@ -208,8 +341,100 @@ export const liqpayCallback = onRequest({
   }
 });
 
+export const paypartsCallback = onRequest({
+  secrets: [PAYPARTS_STORE_ID_SECRET, PAYPARTS_PASSWORD_SECRET],
+}, (request, response) => {
+  if (request.method === "OPTIONS") {
+    response.status(204).send("");
+    return;
+  }
+
+  if (request.method !== "POST") {
+    response.status(405).json({error: "Method not allowed"});
+    return;
+  }
+
+  const password = getConfigValue(
+    PAYPARTS_PASSWORD_SECRET,
+    "PAYPARTS_PASSWORD"
+  );
+  if (!password) {
+    logger.error("payparts_password_missing_for_callback");
+    response.status(500).send("password missing");
+    return;
+  }
+
+  const payload = parsePaypartsCallbackBody(request);
+  if (!payload) {
+    response.status(400).send("invalid body");
+    return;
+  }
+
+  const signatureValid = verifyPaypartsCallbackSignature(payload, password);
+  if (!signatureValid) {
+    logger.warn("payparts_callback_invalid_signature", {
+      orderId: toStringOrEmpty(payload.orderId),
+      paymentState: toUpperString(payload.paymentState),
+      ip: request.ip,
+    });
+    response.status(400).send("invalid signature");
+    return;
+  }
+
+  logger.info("payparts_callback_verified", {
+    orderId: toStringOrEmpty(payload.orderId),
+    storeId: toStringOrEmpty(payload.storeId || payload.storeIdentifier),
+    paymentState: toUpperString(payload.paymentState),
+    message: toStringOrEmpty(payload.message) || undefined,
+  });
+
+  response.status(200).send("ok");
+});
+
+export const getInstallmentSettings = onRequest({
+  secrets: [PAYPARTS_STORE_ID_SECRET, PAYPARTS_PASSWORD_SECRET],
+}, (request, response) => {
+  applyCors(request.headers.origin, response);
+
+  if (request.method === "OPTIONS") {
+    response.status(204).send("");
+    return;
+  }
+
+  if (request.method !== "POST") {
+    response.status(405).json({error: "Method not allowed"});
+    return;
+  }
+
+  if (!isAllowedOrigin(request.headers.origin)) {
+    response.status(403).json({error: "Origin is not allowed"});
+    return;
+  }
+
+  const storeId = getConfigValue(
+    PAYPARTS_STORE_ID_SECRET,
+    "PAYPARTS_STORE_ID"
+  );
+  const password = getConfigValue(
+    PAYPARTS_PASSWORD_SECRET,
+    "PAYPARTS_PASSWORD"
+  );
+  const hasLivePayparts = hasLivePaypartsCredentials(storeId, password);
+  const shouldUsePayparts = hasLivePayparts;
+
+  response.status(200).json({
+    creditProvider: shouldUsePayparts ? "payparts" : "liqpay",
+    showMomentPart: shouldUsePayparts,
+  });
+});
+
 export const getPaymentStatus = onRequest({
-  secrets: [LIQPAY_PUBLIC_KEY_SECRET, LIQPAY_PRIVATE_KEY_SECRET],
+  secrets: [
+    LIQPAY_PUBLIC_KEY_SECRET,
+    LIQPAY_PRIVATE_KEY_SECRET,
+    PAYPARTS_STORE_ID_SECRET,
+    PAYPARTS_PASSWORD_SECRET,
+  ],
 }, async (request, response) => {
   applyCors(request.headers.origin, response);
 
@@ -228,6 +453,87 @@ export const getPaymentStatus = onRequest({
     return;
   }
 
+  const requestBody = request.body as
+    | {orderId?: string; provider?: string}
+    | undefined;
+  const orderId = `${requestBody?.orderId ?? ""}`.trim();
+  if (!orderId) {
+    response.status(400).json({error: "orderId is required"});
+    return;
+  }
+
+  const provider = resolvePaymentProvider(orderId, requestBody?.provider);
+
+  if (provider === "payparts") {
+    const storeId = getConfigValue(
+      PAYPARTS_STORE_ID_SECRET,
+      "PAYPARTS_STORE_ID"
+    );
+    const password = getConfigValue(
+      PAYPARTS_PASSWORD_SECRET,
+      "PAYPARTS_PASSWORD"
+    );
+    if (!storeId || !password) {
+      response.status(500).json({
+        error: "Сервіс кредитування не налаштовано на сервері",
+      });
+      return;
+    }
+
+    try {
+      const paypartsBaseUrl = normalizePaypartsBaseUrl(
+        process.env.PAYPARTS_BASE_URL || PAYPARTS_DEFAULT_BASE_URL
+      );
+      const stateRequest = buildPaypartsStateRequest(
+        storeId,
+        orderId,
+        password
+      );
+      const payload = await getPaypartsPaymentState(
+        stateRequest,
+        paypartsBaseUrl
+      );
+      const signatureValid = verifyPaypartsStateResponseSignature(
+        payload,
+        password
+      );
+      if (!signatureValid) {
+        logger.warn("payparts_state_invalid_signature", {
+          orderId,
+          state: toUpperString(payload.state),
+          paymentState: toUpperString(payload.paymentState),
+        });
+      }
+
+      const status = toLowerString(payload.paymentState || payload.state);
+      const state = toUpperString(payload.state);
+      const paymentState = toUpperString(payload.paymentState);
+      const message = toStringOrEmpty(payload.message);
+
+      response.status(200).json({
+        provider: "payparts",
+        result: payload.state,
+        status: status || "processing",
+        orderId: payload.orderId ?? orderId,
+        amount: payload.amount,
+        currency: "UAH",
+        paytype: inferPaytypeByOrderId(orderId),
+        errorDescription:
+          state === "FAIL" || paymentState === "FAIL" ? message : undefined,
+      });
+      return;
+    } catch (error) {
+      logger.error("payparts_state_failed", {
+        orderId,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+      response.status(500).json({
+        error: "Помилка перевірки статусу кредитної заявки",
+      });
+      return;
+    }
+  }
+
   const publicKey = getConfigValue(
     LIQPAY_PUBLIC_KEY_SECRET,
     "LIQPAY_PUBLIC_KEY"
@@ -236,18 +542,10 @@ export const getPaymentStatus = onRequest({
     LIQPAY_PRIVATE_KEY_SECRET,
     "LIQPAY_PRIVATE_KEY"
   );
-
   if (!publicKey || !privateKey) {
     response.status(500).json({
       error: "Сервер не налаштований для перевірки статусу платежу",
     });
-    return;
-  }
-
-  const orderId = `${(request.body as {orderId?: string})?.orderId ?? ""}`
-    .trim();
-  if (!orderId) {
-    response.status(400).json({error: "orderId is required"});
     return;
   }
 
@@ -297,6 +595,7 @@ export const getPaymentStatus = onRequest({
     }
 
     response.status(200).json({
+      provider: "liqpay",
       result: payload.result,
       status: payload.status,
       orderId: payload.order_id ?? orderId,
@@ -342,6 +641,116 @@ function parseCallbackBody(
   }
 
   return {data, signature};
+}
+
+function parsePaypartsCallbackBody(
+  request: Parameters<Parameters<typeof onRequest>[0]>[0]
+): PaypartsCallbackPayload | null {
+  const body = request.body as Record<string, unknown> | undefined;
+  if (body && Object.keys(body).length > 0) {
+    return {
+      storeId: toStringOrEmpty(body.storeId),
+      storeIdentifier: toStringOrEmpty(body.storeIdentifier),
+      orderId: toStringOrEmpty(body.orderId),
+      paymentState: toStringOrEmpty(body.paymentState),
+      message: toStringOrEmpty(body.message),
+      signature: toStringOrEmpty(body.signature),
+    };
+  }
+
+  const rawBody = request.rawBody?.toString("utf8");
+  if (!rawBody) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(rawBody) as Record<string, unknown>;
+    return {
+      storeId: toStringOrEmpty(parsed.storeId),
+      storeIdentifier: toStringOrEmpty(parsed.storeIdentifier),
+      orderId: toStringOrEmpty(parsed.orderId),
+      paymentState: toStringOrEmpty(parsed.paymentState),
+      message: toStringOrEmpty(parsed.message),
+      signature: toStringOrEmpty(parsed.signature),
+    };
+  } catch {
+    const params = new URLSearchParams(rawBody);
+    return {
+      storeId: params.get("storeId") || undefined,
+      storeIdentifier: params.get("storeIdentifier") || undefined,
+      orderId: params.get("orderId") || undefined,
+      paymentState: params.get("paymentState") || undefined,
+      message: params.get("message") || undefined,
+      signature: params.get("signature") || undefined,
+    };
+  }
+}
+
+function resolvePaypartsPartsCount(
+  paymentMethod: "paypart" | "moment_part",
+  rawInstallments: unknown
+): number {
+  const range = paymentMethod === "paypart" ?
+    {min: 2, max: 5, fallback: 4} :
+    {min: 5, max: 24, fallback: 5};
+  const configuredDefault = Number(
+    paymentMethod === "paypart"
+      ? process.env.PAYPARTS_DEFAULT_PARTS_PP
+      : process.env.PAYPARTS_DEFAULT_PARTS_II
+  );
+
+  const fallbackCount =
+    Number.isInteger(configuredDefault) &&
+    configuredDefault >= range.min &&
+    configuredDefault <= range.max
+      ? configuredDefault
+      : range.fallback;
+
+  if (rawInstallments === undefined || rawInstallments === null) {
+    return fallbackCount;
+  }
+
+  const parsed = Number(rawInstallments);
+  if (
+    !Number.isInteger(parsed) ||
+    parsed < range.min ||
+    parsed > range.max
+  ) {
+    throw new Error(
+      "Кількість платежів має бути цілим числом " +
+      `від ${range.min} до ${range.max}`
+    );
+  }
+
+  return parsed;
+}
+
+function resolvePaymentProvider(
+  orderId: string,
+  providerRaw: unknown
+): "liqpay" | "payparts" {
+  const provider = toLowerString(providerRaw);
+  if (provider === "payparts") {
+    return "payparts";
+  }
+
+  if (orderId.startsWith("PP-") || orderId.startsWith("II-")) {
+    return "payparts";
+  }
+
+  return "liqpay";
+}
+
+function inferPaytypeByOrderId(orderId: string): string {
+  if (orderId.startsWith("PP-")) {
+    return "paypart";
+  }
+
+  if (orderId.startsWith("II-")) {
+    return "moment_part";
+  }
+
+  return "";
 }
 
 function applyCors(
@@ -390,6 +799,34 @@ function resolveFunctionsBaseUrl(
   return `${protocol}://${host}`;
 }
 
+function resolvePaypartsSiteUrl(siteUrl: string): string {
+  if (process.env.PAYPARTS_SITE_URL) {
+    return normalizeUrl(process.env.PAYPARTS_SITE_URL);
+  }
+
+  if (isLocalUrl(siteUrl)) {
+    return "https://vikna-service-prod.web.app";
+  }
+
+  return siteUrl;
+}
+
+function resolvePaypartsCallbackBaseUrl(functionsBaseUrl: string): string {
+  if (process.env.PAYPARTS_CALLBACK_BASE_URL) {
+    return normalizeUrl(process.env.PAYPARTS_CALLBACK_BASE_URL);
+  }
+
+  if (isLocalUrl(functionsBaseUrl)) {
+    return "https://europe-west1-vikna-service-prod.cloudfunctions.net";
+  }
+
+  return functionsBaseUrl;
+}
+
+function isLocalUrl(url: string): boolean {
+  return url.includes("localhost") || url.includes("127.0.0.1");
+}
+
 async function callLiqPayApi(
   payload: LiqPayPayload,
   privateKey: string
@@ -412,6 +849,10 @@ async function callLiqPayApi(
 
 function toLowerString(value: unknown): string {
   return `${value ?? ""}`.trim().toLowerCase();
+}
+
+function toUpperString(value: unknown): string {
+  return `${value ?? ""}`.trim().toUpperCase();
 }
 
 function toStringOrEmpty(value: unknown): string {
@@ -443,4 +884,42 @@ function getConfigValue(
   }
 
   return process.env[envName];
+}
+
+function hasLivePaypartsCredentials(
+  storeId: string | undefined,
+  password: string | undefined
+): boolean {
+  const normalizedStoreId = toStringOrEmpty(storeId);
+  const normalizedPassword = toStringOrEmpty(password);
+  if (!normalizedStoreId || !normalizedPassword) {
+    return false;
+  }
+
+  if (
+    normalizedStoreId === PAYPARTS_DEMO_STORE_ID ||
+    normalizedPassword === PAYPARTS_DEMO_PASSWORD
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function explainPaypartsFallback(
+  storeId: string | undefined,
+  password: string | undefined
+): string {
+  if (!storeId || !password) {
+    return "missing_credentials";
+  }
+
+  if (
+    toStringOrEmpty(storeId) === PAYPARTS_DEMO_STORE_ID ||
+    toStringOrEmpty(password) === PAYPARTS_DEMO_PASSWORD
+  ) {
+    return "demo_credentials";
+  }
+
+  return "unknown";
 }

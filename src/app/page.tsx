@@ -66,34 +66,36 @@ export default function Home() {
 
           <article className="card contact-card">
             <h2>Контакти</h2>
-            <ul>
-              <li>
-                вул. Миру 67, т. <a href="tel:+380677774027">067-777-40-27</a>
-              </li>
-              <li>
-                вул. Торгова 57/а, т. <a href="tel:+380972542080">097-254-20-80</a>
-              </li>
-            </ul>
-            <div className="contact-tools">
-              <div className="socials">
-                <a
-                  className="btn btn-secondary"
-                  href="https://www.facebook.com/oknaservis"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <FacebookIcon />
-                  Facebook
-                </a>
-                <a
-                  className="btn btn-secondary"
-                  href="https://www.instagram.com/okna_servis_kiliya"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <InstagramIcon />
-                  Instagram
-                </a>
+            <div className="contact-layout">
+              <div className="contact-info">
+                <ul>
+                  <li>
+                    вул. Миру 67, т. <a href="tel:+380677774027">067-777-40-27</a>
+                  </li>
+                  <li>
+                    вул. Торгова 57/а, т. <a href="tel:+380972542080">097-254-20-80</a>
+                  </li>
+                </ul>
+                <div className="socials">
+                  <a
+                    className="btn btn-secondary"
+                    href="https://www.facebook.com/oknaservis"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <FacebookIcon />
+                    Facebook
+                  </a>
+                  <a
+                    className="btn btn-secondary"
+                    href="https://www.instagram.com/okna_servis_kiliya"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <InstagramIcon />
+                    Instagram
+                  </a>
+                </div>
               </div>
               <div className="contact-qr">
                 <p>QR-код сайту</p>
@@ -106,8 +108,8 @@ export default function Home() {
                   <Image
                     src="/qr-site.png"
                     alt="QR-код для переходу на сайт Вікна-Сервіс"
-                    width={112}
-                    height={112}
+                    width={150}
+                    height={150}
                   />
                 </a>
               </div>
